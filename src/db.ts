@@ -1,0 +1,176 @@
+import Dexie, { type Table } from 'dexie';
+import type { JSONContent } from '@tiptap/react';
+
+/** 本棚に並ぶ参考書（PDF） */
+export interface Book {
+  id: string;
+  title: string;
+  color: string;
+  file: Blob;
+  fileName: string;
+  size: number;
+  pageCount?: number;
+  createdAt: number;
+  lastOpenedAt?: number;
+}
+
+/** 参考書ごとの読書位置（バインダー単位で記憶） */
+export interface ReadingPosition {
+  page: number;
+  zoom: number | 'fit';
+}
+
+/** 参考書とノートをセットで束ねるバインダー */
+export interface Binder {
+  id: string;
+  title: string;
+  color: string;
+  bookIds: string[];
+  activeBookId?: string;
+  lastNoteId?: string;
+  positions: Record<string, ReadingPosition>;
+  splitRatio: number;
+  createdAt: number;
+  updatedAt: number;
+  lastOpenedAt?: number;
+}
+
+export interface Note {
+  id: string;
+  binderId: string;
+  title: string;
+  content: JSONContent | null;
+  /** 検索用のプレーンテキスト */
+  text: string;
+  order: number;
+  /** このノートを開いたときに表示する参考書とページ */
+  bookId?: string;
+  page?: number;
+  createdAt: number;
+  updatedAt: number;
+}
+
+/** 参考書のしおり */
+export interface Bookmark {
+  id: string;
+  bookId: string;
+  page: number;
+  label: string;
+  createdAt: number;
+}
+
+/** 学習時間の記録 */
+export interface StudySession {
+  id: string;
+  binderId: string;
+  date: string;
+  seconds: number;
+  startedAt: number;
+}
+
+class StudyDB extends Dexie {
+  books!: Table<Book, string>;
+  binders!: Table<Binder, string>;
+  notes!: Table<Note, string>;
+  bookmarks!: Table<Bookmark, string>;
+  sessions!: Table<StudySession, string>;
+
+  constructor() {
+    super('study-sakura');
+    this.version(1).stores({
+      books: 'id, createdAt, lastOpenedAt',
+      binders: 'id, createdAt, lastOpenedAt',
+      notes: 'id, binderId, [binderId+order], updatedAt',
+      bookmarks: 'id, bookId',
+      sessions: 'id, binderId, date',
+    });
+  }
+}
+
+export const db = new StudyDB();
+
+export const uid = () =>
+  (crypto.randomUUID?.() ?? `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`);
+
+export const today = (d = new Date()) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
+export const BOOK_COLORS = ['#3b5b8c', '#8c3b3b', '#2f6b4f', '#6b4f8c', '#b0782a', '#2a7b8c', '#555c66', '#8c5a3b'];
+export const BINDER_COLORS = ['#e0607e', '#f2a541', '#5aa469', '#4f86c6', '#9b6fc7', '#e07a5f', '#3d9ca8', '#7a7a7a'];
+
+export async function addBook(file: File): Promise<Book> {
+  const count = await db.books.count();
+  const book: Book = {
+    id: uid(),
+    title: file.name.replace(/\.pdf$/i, ''),
+    color: BOOK_COLORS[count % BOOK_COLORS.length],
+    file,
+    fileName: file.name,
+    size: file.size,
+    createdAt: Date.now(),
+  };
+  await db.books.add(book);
+  return book;
+}
+
+export async function deleteBook(bookId: string) {
+  await db.transaction('rw', db.books, db.binders, db.bookmarks, async () => {
+    await db.books.delete(bookId);
+    await db.bookmarks.where('bookId').equals(bookId).delete();
+    await db.binders.toCollection().modify((b) => {
+      b.bookIds = b.bookIds.filter((id) => id !== bookId);
+      delete b.positions[bookId];
+      if (b.activeBookId === bookId) b.activeBookId = b.bookIds[0];
+    });
+  });
+}
+
+export async function createBinder(title: string, color: string, bookIds: string[]): Promise<Binder> {
+  const now = Date.now();
+  const binder: Binder = {
+    id: uid(),
+    title,
+    color,
+    bookIds,
+    activeBookId: bookIds[0],
+    positions: {},
+    splitRatio: 0.5,
+    createdAt: now,
+    updatedAt: now,
+  };
+  const note = newNote(binder.id, 0, 'はじめてのノート');
+  binder.lastNoteId = note.id;
+  await db.transaction('rw', db.binders, db.notes, async () => {
+    await db.binders.add(binder);
+    await db.notes.add(note);
+  });
+  return binder;
+}
+
+export async function deleteBinder(binderId: string) {
+  await db.transaction('rw', db.binders, db.notes, db.sessions, async () => {
+    await db.binders.delete(binderId);
+    await db.notes.where('binderId').equals(binderId).delete();
+    await db.sessions.where('binderId').equals(binderId).delete();
+  });
+}
+
+export function newNote(binderId: string, order: number, title = '無題のノート'): Note {
+  const now = Date.now();
+  return { id: uid(), binderId, title, content: null, text: '', order, createdAt: now, updatedAt: now };
+}
+
+export async function addNote(binderId: string, init?: Partial<Note>): Promise<Note> {
+  const last = await db.notes.where('[binderId+order]').between([binderId, Dexie.minKey], [binderId, Dexie.maxKey]).last();
+  const note = { ...newNote(binderId, (last?.order ?? -1) + 1), ...init };
+  await db.notes.add(note);
+  return note;
+}
+
+export async function addStudyTime(binderId: string, seconds: number, startedAt: number) {
+  const date = today(new Date(startedAt));
+  const id = `${binderId}:${date}`;
+  const existing = await db.sessions.get(id);
+  if (existing) await db.sessions.update(id, { seconds: existing.seconds + seconds });
+  else await db.sessions.add({ id, binderId, date, seconds, startedAt });
+}
