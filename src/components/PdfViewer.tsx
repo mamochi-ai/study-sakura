@@ -14,15 +14,17 @@ interface Props {
   captureMode: boolean;
   onPageChange: (page: number) => void;
   onCapture: (page: number, rect: { x: number; y: number; w: number; h: number }) => void;
-  onTextSelect: (sel: { text: string; page: number; x: number; y: number } | null) => void;
+  onTextSelect: (sel: { text: string; page: number; x: number; y: number; bottom: number } | null) => void;
   onFitWidth: (width: number) => void;
   onCtrlWheel: (deltaY: number) => void;
+  /** 2本指のピンチ操作が終わったときの拡大率（今の何倍か） */
+  onPinchZoom: (factor: number) => void;
 }
 
 const GAP = 12;
 
 export const PdfViewer = forwardRef<PdfViewerHandle, Props>(function PdfViewer(
-  { doc, scale, initialPage, captureMode, onPageChange, onCapture, onTextSelect, onFitWidth, onCtrlWheel },
+  { doc, scale, initialPage, captureMode, onPageChange, onCapture, onTextSelect, onFitWidth, onCtrlWheel, onPinchZoom },
   ref,
 ) {
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -164,17 +166,72 @@ export const PdfViewer = forwardRef<PdfViewerHandle, Props>(function PdfViewer(
   }, [onCtrlWheel]);
 
   // テキスト選択 → 「ノートに引用」ボタン
-  const onMouseUp = () => {
+  // iPad では長押しで選択するため mouseup が来ない。selectionchange で拾う
+  const selectCb = useRef(onTextSelect);
+  selectCb.current = onTextSelect;
+  useEffect(() => {
     if (captureMode) return;
-    setTimeout(() => {
+    let timer: ReturnType<typeof setTimeout>;
+    const check = () => {
       const sel = window.getSelection();
       const text = sel?.toString().trim();
-      if (!sel || !text || sel.rangeCount === 0 || !scrollRef.current?.contains(sel.anchorNode)) return onTextSelect(null);
+      if (!sel || !text || sel.rangeCount === 0 || !scrollRef.current?.contains(sel.anchorNode)) return selectCb.current(null);
       const pageEl = (sel.anchorNode instanceof Element ? sel.anchorNode : sel.anchorNode?.parentElement)?.closest<HTMLElement>('[data-page]');
       const r = sel.getRangeAt(0).getBoundingClientRect();
-      onTextSelect({ text, page: Number(pageEl?.dataset.page ?? pageRef.current), x: r.left + r.width / 2, y: r.top });
-    });
-  };
+      selectCb.current({ text, page: Number(pageEl?.dataset.page ?? pageRef.current), x: r.left + r.width / 2, y: r.top, bottom: r.bottom });
+    };
+    const onChange = () => {
+      clearTimeout(timer);
+      timer = setTimeout(check, 300);
+    };
+    document.addEventListener('selectionchange', onChange);
+    return () => {
+      clearTimeout(timer);
+      document.removeEventListener('selectionchange', onChange);
+    };
+  }, [captureMode]);
+
+  // 2本指のピンチで拡大縮小（指を離したときに描き直す。途中は見た目だけ拡大）
+  const pagesRef = useRef<HTMLDivElement>(null);
+  const pinchCb = useRef(onPinchZoom);
+  pinchCb.current = onPinchZoom;
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    let start: { dist: number; factor: number } | null = null;
+    const dist = (t: TouchList) => Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
+    const onStart = (e: TouchEvent) => {
+      if (e.touches.length !== 2 || !pagesRef.current) return;
+      const r = pagesRef.current.getBoundingClientRect();
+      const cx = (e.touches[0].clientX + e.touches[1].clientX) / 2 - r.left;
+      const cy = (e.touches[0].clientY + e.touches[1].clientY) / 2 - r.top;
+      pagesRef.current.style.transformOrigin = `${cx}px ${cy}px`;
+      start = { dist: dist(e.touches), factor: 1 };
+    };
+    const onMove = (e: TouchEvent) => {
+      if (!start || e.touches.length !== 2 || !pagesRef.current) return;
+      e.preventDefault();
+      start.factor = Math.min(4, Math.max(0.25, dist(e.touches) / start.dist));
+      pagesRef.current.style.transform = `scale(${start.factor})`;
+    };
+    const onEnd = (e: TouchEvent) => {
+      if (!start || e.touches.length >= 2) return;
+      const f = start.factor;
+      start = null;
+      if (pagesRef.current) pagesRef.current.style.transform = '';
+      if (Math.abs(f - 1) > 0.04) pinchCb.current(f);
+    };
+    el.addEventListener('touchstart', onStart, { passive: true });
+    el.addEventListener('touchmove', onMove, { passive: false });
+    el.addEventListener('touchend', onEnd);
+    el.addEventListener('touchcancel', onEnd);
+    return () => {
+      el.removeEventListener('touchstart', onStart);
+      el.removeEventListener('touchmove', onMove);
+      el.removeEventListener('touchend', onEnd);
+      el.removeEventListener('touchcancel', onEnd);
+    };
+  }, [sizes]);
 
   if (!sizes) return <div className="pdf-scroll"><div className="pdf-loading">読み込み中…</div></div>;
 
@@ -184,10 +241,8 @@ export const PdfViewer = forwardRef<PdfViewerHandle, Props>(function PdfViewer(
       ref={scrollRef}
       className={`pdf-scroll${captureMode ? ' capture-mode' : ''}`}
       onScroll={onScroll}
-      onMouseUp={onMouseUp}
-      onMouseDown={() => onTextSelect(null)}
     >
-      <div className="pdf-pages" style={{ height: offsets[offsets.length - 1], width: contentWidth }}>
+      <div ref={pagesRef} className="pdf-pages" style={{ height: offsets[offsets.length - 1], width: contentWidth }}>
         {sizes.map((s, i) => (
           <PdfPage
             key={i}

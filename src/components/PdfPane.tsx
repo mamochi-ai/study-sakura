@@ -20,6 +20,7 @@ interface Props {
   onPositionChange: (bookId: string, pos: ReadingPosition) => void;
 }
 
+const IS_TOUCH = matchMedia('(pointer: coarse)').matches;
 const ZOOMS = [0.5, 0.67, 0.8, 0.9, 1, 1.1, 1.25, 1.5, 1.75, 2, 2.5, 3, 4];
 
 export const PdfPane = forwardRef<PdfPaneHandle, Props>(function PdfPane(
@@ -35,7 +36,7 @@ export const PdfPane = forwardRef<PdfPaneHandle, Props>(function PdfPane(
   const [fitScale, setFitScale] = useState(1);
   const [capture, setCapture] = useState(false);
   const [sidebar, setSidebar] = useState<'outline' | 'bookmarks' | 'search' | null>(null);
-  const [selection, setSelection] = useState<{ text: string; page: number; x: number; y: number } | null>(null);
+  const [selection, setSelection] = useState<{ text: string; page: number; x: number; y: number; bottom: number } | null>(null);
   const pendingPage = useRef<number | null>(null);
   const pageRef = useRef(page);
   pageRef.current = page;
@@ -154,7 +155,7 @@ export const PdfPane = forwardRef<PdfPaneHandle, Props>(function PdfPane(
           <div className="tb-group">
             <button className="icon-btn" onClick={() => zoomStep(-1)} title="縮小 (Ctrl+-)">−</button>
             <button className="zoom-label" onClick={() => setZoom(zoom === 'fit' ? 1 : 'fit')} title="クリックで「幅に合わせる」/「100%」を切り替え">
-              {zoom === 'fit' ? '幅に合わせる' : `${Math.round(scale * 100)}%`}
+              {zoom === 'fit' ? <>幅<span className="tb-text">に合わせる</span></> : `${Math.round(scale * 100)}%`}
             </button>
             <button className="icon-btn" onClick={() => zoomStep(1)} title="拡大 (Ctrl+=)">＋</button>
           </div>
@@ -164,7 +165,7 @@ export const PdfPane = forwardRef<PdfPaneHandle, Props>(function PdfPane(
             onClick={() => setCapture(!capture)}
             title="ドラッグした範囲を画像としてノートに貼り付け (Esc で終了)"
           >
-            ✂ 切り取り
+            ✂<span className="tb-text"> 切り取り</span>
           </button>
           <button
             className="btn small"
@@ -173,7 +174,7 @@ export const PdfPane = forwardRef<PdfPaneHandle, Props>(function PdfPane(
             }}
             title="このページへのリンクをノートに挿入 (Ctrl+Shift+P)"
           >
-            📖 p.{page} を参照
+            📖<span className="tb-text"> </span>p.{page}<span className="tb-text"> を参照</span>
           </button>
           <button
             className="icon-btn"
@@ -223,6 +224,7 @@ export const PdfPane = forwardRef<PdfPaneHandle, Props>(function PdfPane(
               onTextSelect={setSelection}
               onFitWidth={setFitScale}
               onCtrlWheel={onCtrlWheel}
+              onPinchZoom={(f) => setZoom(Math.min(4, Math.max(0.3, Math.round(scale * f * 100) / 100)))}
             />
           )}
           {capture && <div className="capture-hint">ノートに貼りたい範囲をドラッグ　<button className="btn small" onClick={() => setCapture(false)}>終了</button></div>}
@@ -231,8 +233,12 @@ export const PdfPane = forwardRef<PdfPaneHandle, Props>(function PdfPane(
 
       {selection && doc && (
         <div
-          className={`selection-pop${selection.y < 140 ? ' below' : ''}`}
-          style={{ left: Math.min(Math.max(selection.x, 110), window.innerWidth - 110), top: selection.y < 140 ? selection.y + 28 : selection.y }} onMouseDown={(e) => e.preventDefault()}>
+          // iPad では選択範囲の上に OS のメニューが出るので、こちらは下に出す
+          className={`selection-pop${selection.y < 140 || IS_TOUCH ? ' below' : ''}`}
+          style={{
+            left: Math.min(Math.max(selection.x, 110), window.innerWidth - 110),
+            top: IS_TOUCH ? selection.bottom + 14 : selection.y < 140 ? selection.bottom + 8 : selection.y,
+          }} onMouseDown={(e) => e.preventDefault()}>
           <button
             onClick={() => {
               if (insertFromPdf(bus.current, { kind: 'text', text: selection.text, bookId: doc.bookId, page: selection.page })) toast('引用をノートに追加しました');

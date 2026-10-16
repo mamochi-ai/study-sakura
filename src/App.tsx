@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { DialogHost, ToastHost } from './components/Modal';
+import UpdatePrompt from './components/UpdatePrompt';
 import { applyTheme, useSettings } from './lib/settings';
 import DeskView from './views/DeskView';
 import StudyView from './views/StudyView';
@@ -47,6 +48,7 @@ export default function App() {
       )}
       <DialogHost />
       <ToastHost />
+      <UpdatePrompt />
     </>
   );
 }

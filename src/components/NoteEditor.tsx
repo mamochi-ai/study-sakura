@@ -344,7 +344,7 @@ function Toolbar({
         onClick={onMemorize}
         title="赤字・緑マーカーを隠して暗記チェック（赤シート）"
       >
-        {memorize ? '暗記シートを外す' : '🟥 暗記シート'}
+        {memorize ? <>🟥<span className="tb-text"> 暗記シートを</span>外す</> : <>🟥<span className="tb-text"> 暗記シート</span></>}
       </button>
       {s.image && (
         <>

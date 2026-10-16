@@ -84,7 +84,8 @@ export default function DeskView({ onOpenBinder }: { onOpenBinder: (id: string) 
             ))}
             {books && books.length === 0 && (
               <button className="shelf-empty" onClick={() => fileRef.current?.click()}>
-                PDF をここにドラッグ＆ドロップ<br />またはクリックして参考書を追加
+                タップして参考書（PDF）を追加<br />
+                <small>パソコンではドラッグ＆ドロップでも追加できます</small>
               </button>
             )}
           </div>
@@ -98,7 +99,7 @@ export default function DeskView({ onOpenBinder }: { onOpenBinder: (id: string) 
             ))}
             {binders && binders.length === 0 && (
               <button className="shelf-empty" onClick={() => setBinderDialog({})}>
-                バインダー ＝ 参考書とノートのセット<br />科目ごとに作ってみましょう
+                バインダー ＝ 参考書とノートのセット<br />タップして科目ごとに作りましょう
               </button>
             )}
           </div>
