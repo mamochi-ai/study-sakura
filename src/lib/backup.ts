@@ -28,17 +28,18 @@ export function downloadBlob(blob: Blob, fileName: string) {
 
 /** すべてのデータ（参考書 PDF を含む）を 1 つのファイルに書き出す */
 export async function exportBackup() {
-  const [books, binders, notes, bookmarks, sessions] = await Promise.all([
+  const [books, binders, notes, bookmarks, sessions, strokes] = await Promise.all([
     db.books.toArray(),
     db.binders.toArray(),
     db.notes.toArray(),
     db.bookmarks.toArray(),
     db.sessions.toArray(),
+    db.strokes.toArray(),
   ]);
   const encodedBooks = await Promise.all(
     books.map(async ({ file, ...rest }) => ({ ...rest, fileType: file.type || 'application/pdf', data: await blobToBase64(file) })),
   );
-  const payload = { format: FORMAT, version: 1, exportedAt: new Date().toISOString(), books: encodedBooks, binders, notes, bookmarks, sessions };
+  const payload = { format: FORMAT, version: 1, exportedAt: new Date().toISOString(), books: encodedBooks, binders, notes, bookmarks, sessions, strokes };
   const d = new Date();
   const stamp = `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`;
   downloadBlob(new Blob([JSON.stringify(payload)], { type: 'application/json' }), `study-sakura-${stamp}.json`);
@@ -52,12 +53,13 @@ export async function importBackup(file: File) {
     ...rest,
     file: base64ToBlob(data, fileType),
   }));
-  await db.transaction('rw', [db.books, db.binders, db.notes, db.bookmarks, db.sessions], async () => {
+  await db.transaction('rw', [db.books, db.binders, db.notes, db.bookmarks, db.sessions, db.strokes], async () => {
     await db.books.bulkPut(books);
     await db.binders.bulkPut(payload.binders ?? []);
     await db.notes.bulkPut(payload.notes ?? []);
     await db.bookmarks.bulkPut(payload.bookmarks ?? []);
     await db.sessions.bulkPut(payload.sessions ?? []);
+    await db.strokes.bulkPut(payload.strokes ?? []);
   });
   return { books: books.length, binders: payload.binders?.length ?? 0, notes: payload.notes?.length ?? 0 };
 }

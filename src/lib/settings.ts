@@ -7,10 +7,14 @@ export interface Settings {
   noteFontSize: number;
   /** ノートを開くと、そのノートで最後に見ていたページへ移動する */
   syncNotePage: boolean;
+  /** 新しいノートの用紙 */
+  defaultPaper: 'plain' | 'lined' | 'grid' | 'dots';
+  /** 手書きノートで指でも線を書く（Apple Pencil がない場合用） */
+  fingerDraw: boolean;
 }
 
 const KEY = 'study-sakura:settings';
-const defaults: Settings = { theme: 'system', pomodoroWork: 25, pomodoroBreak: 5, noteFontSize: 16, syncNotePage: true };
+const defaults: Settings = { theme: 'system', pomodoroWork: 25, pomodoroBreak: 5, noteFontSize: 16, syncNotePage: true, defaultPaper: 'lined', fingerDraw: false };
 
 let state: Settings = (() => {
   try {

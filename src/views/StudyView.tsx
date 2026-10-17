@@ -3,7 +3,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { BinderDialog, SettingsDialog } from '../components/Dialogs';
 import { toast } from '../components/Modal';
 import NoteEditor from '../components/NoteEditor';
-import NoteList from '../components/NoteList';
+import InkEditor from '../components/InkEditor';
+import { NoteTabs } from '../components/NoteList';
 import { PdfPane, type PdfPaneHandle } from '../components/PdfPane';
 import { StudyTimer } from '../components/StudyTimer';
 import { addNote, db, type Book, type ReadingPosition } from '../db';
@@ -29,7 +30,6 @@ export default function StudyView({ binderId, onBack }: { binderId: string; onBa
   const notes = useLiveQuery(() => db.notes.where('[binderId+order]').between([binderId, -Infinity], [binderId, Infinity]).toArray(), [binderId]);
   const [layout, setLayout] = useState<Layout>('split');
   const [ratio, setRatio] = useState<number | null>(null);
-  const [listOpen, setListOpen] = useState(() => localStorage.getItem('study-sakura:noteList') !== 'closed');
   const [editBinder, setEditBinder] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const narrow = useNarrow();
@@ -143,10 +143,6 @@ export default function StudyView({ binderId, onBack }: { binderId: string; onBa
     return () => window.removeEventListener('keydown', onKey);
   }, []);
 
-  useEffect(() => {
-    localStorage.setItem('study-sakura:noteList', listOpen ? 'open' : 'closed');
-  }, [listOpen]);
-
   if (!binder || !notes) return <div className="study-view loading">読み込み中…</div>;
 
   const split = ratio ?? binder.splitRatio ?? 0.5;
@@ -197,15 +193,14 @@ export default function StudyView({ binderId, onBack }: { binderId: string; onBa
             />
           )}
           <section className="pane note-side" style={{ flexBasis: `${(1 - pdfSize) * 100}%`, display: pdfSize === 1 ? 'none' : undefined }}>
-            {listOpen ? (
-              <NoteList notes={notes} activeId={activeNote?.id} binderId={binderId} onSelect={selectNote} onCollapse={() => setListOpen(false)} />
+            <NoteTabs notes={notes} activeId={activeNote?.id} binderId={binderId} onSelect={selectNote} />
+            {!activeNote ? (
+              <div className="note-editor" />
+            ) : activeNote.kind === 'ink' ? (
+              <InkEditor key={activeNote.id} note={activeNote} />
             ) : (
-              <button className="note-list-collapsed" onClick={() => setListOpen(true)} title="ノート一覧を開く">
-                <span>»</span>
-                <span className="vertical-text">ノート一覧（{notes.length}）</span>
-              </button>
+              <NoteEditor key={activeNote.id} note={activeNote} />
             )}
-            {activeNote ? <NoteEditor key={activeNote.id} note={activeNote} /> : <div className="note-editor" />}
           </section>
         </div>
 
