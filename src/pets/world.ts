@@ -62,3 +62,8 @@ export async function feedPets(ids: string[]): Promise<FeedResult> {
     return { ok: true, fed: pets.map((p) => p.id) } as const;
   });
 }
+
+/** 解放した家具を記録する（一度解放したら消えない） */
+export async function saveUnlocked(items: string[]) {
+  await db.petWorld.update('world', { unlocked: items, updatedAt: Date.now() });
+}

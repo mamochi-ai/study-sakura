@@ -3,11 +3,11 @@ import { useEffect, useRef, useState } from 'react';
 import { Modal, askText, toast } from '../components/Modal';
 import { db, today, type Pet, type PetWorld } from '../db';
 import { formatDuration } from '../lib/format';
-import { currentFullness, FOOD_PER_10MIN, FOOD_PER_MEAL, foodLeft, HUNGRY_AT, MAX_FULLNESS, MAX_PETS, nextPetSlotHours, nextUnlock, petSlots, unlockedItems } from './rules';
+import { currentFullness, FOOD_PER_10MIN, FURNITURE_UNLOCKS, FOOD_PER_MEAL, foodLeft, HUNGRY_AT, MAX_FULLNESS, MAX_PETS, nextPetSlotHours, nextUnlock, petSlots, unlockedItems } from './rules';
 import { GROUP_LABEL, SPECIES, speciesOf } from './species';
 import Room, { type RoomHandle } from './Room';
 import { Sprite } from './sprite';
-import { adoptPet, ensureWorld, feedPets, renamePet, setMiniPet } from './world';
+import { adoptPet, ensureWorld, feedPets, renamePet, saveUnlocked, setMiniPet } from './world';
 
 /** ごはんをあげて、食べた子を餌皿へ向かわせる */
 async function feed(ids: string[], room: RoomHandle | null) {
@@ -31,6 +31,8 @@ export default function PetRoom({ onBack }: { onBack: () => void }) {
   const [menuPetId, setMenuPetId] = useState<string | null>(null);
   const roomRef = useRef<RoomHandle>(null);
   const [, setTick] = useState(0);
+  /** いま解放されたばかりの家具（お知らせと、置かれる演出） */
+  const [fresh, setFresh] = useState<string[]>([]);
 
   // 満腹度は時間で減るので、開いている間も 1 分ごとに表示を更新する
   useEffect(() => {
@@ -46,6 +48,22 @@ export default function PetRoom({ onBack }: { onBack: () => void }) {
   useEffect(() => {
     if (pets && pets.length === 0) setPicker(true);
   }, [pets]);
+
+  // 累積学習時間で新しく解放された家具を記録して知らせる（初めて部屋を作ったときは知らせない）
+  useEffect(() => {
+    if (!w) return;
+    const now = unlockedItems(w);
+    const added = now.filter((k) => !w.unlocked.includes(k));
+    if (!added.length) return;
+    saveUnlocked(now);
+    if (w.unlocked.length) setFresh(added);
+  }, [w]);
+
+  useEffect(() => {
+    if (!fresh.length) return;
+    const t = setTimeout(() => setFresh([]), 6000);
+    return () => clearTimeout(t);
+  }, [fresh]);
 
   if (!w || !pets) return <div className="pet-view loading">読み込み中…</div>;
 
@@ -70,7 +88,14 @@ export default function PetRoom({ onBack }: { onBack: () => void }) {
       </header>
 
       <div className="pet-body">
-        <Room ref={roomRef} items={items} pets={pets} onTapBowl={feedAll} />
+        <div className="room-wrap">
+          <Room ref={roomRef} items={items} pets={pets} fresh={fresh} onTapBowl={feedAll} />
+          {fresh.length > 0 && (
+            <button className="unlock-banner" onClick={() => setFresh([])}>
+              🎉 新しい家具が届きました：{FURNITURE_UNLOCKS.filter((u) => u.items.some((k) => fresh.includes(k))).map((u) => u.label).join('・')}
+            </button>
+          )}
+        </div>
 
         <aside className="pet-panel">
           <div className="pet-stats">
@@ -113,6 +138,18 @@ export default function PetRoom({ onBack }: { onBack: () => void }) {
             })}
           </ul>
           <div className="pet-next">
+            <ul className="furniture-list">
+              {FURNITURE_UNLOCKS.map((u) => {
+                const open = u.items.every((k) => items.includes(k));
+                return (
+                  <li key={u.label} className={open ? 'open' : ''}>
+                    <span>{open ? '✓' : '🔒'}</span>
+                    {u.label}
+                    <span className="furniture-hours">{u.hours ? `${u.hours}時間` : '最初から'}</span>
+                  </li>
+                );
+              })}
+            </ul>
             <div>🪑 次の家具：{next ? `${next.label}（累積 ${next.hours}時間）` : 'すべて解放済み'}</div>
             <div>
               🐾 次のお迎え：

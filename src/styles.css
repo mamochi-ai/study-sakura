@@ -795,11 +795,18 @@ h1, h2 { margin: 0; }
 }
 .pet-title { font-size: 17px; }
 .pet-body { flex: 1; min-height: 0; display: flex; gap: 12px; padding: 12px calc(12px + env(safe-area-inset-right)) calc(12px + env(safe-area-inset-bottom)) calc(12px + env(safe-area-inset-left)); }
+.room-wrap { flex: 1; min-width: 0; position: relative; display: flex; }
 .room-box { flex: 1; min-width: 0; position: relative; overflow: hidden; border-radius: 14px; display: grid; place-items: center; }
 /* 1536×1024 の部屋を、中央を基準に縮小して箱に収める */
 .room { position: absolute; left: 50%; top: 50%; translate: -50% -50%; transform-origin: center; border-radius: 18px; overflow: hidden; box-shadow: 0 6px 24px rgba(0,0,0,.18); }
 .room-bg { position: absolute; inset: 0; width: 100%; height: 100%; }
 .room-item { position: absolute; pointer-events: none; }
+.room-item.fresh { animation: furniture-in .7s cubic-bezier(.3, 1.6, .5, 1) both; transform-origin: 50% 100%; }
+@keyframes furniture-in { from { transform: translateY(-60px) scale(.6); opacity: 0; } to { transform: none; opacity: 1; } }
+.unlock-banner {
+  position: absolute; left: 50%; top: 18px; translate: -50% 0; z-index: 2; border: 0; cursor: pointer; font: inherit; font-weight: 700;
+  padding: 10px 20px; border-radius: 99px; background: var(--surface); color: var(--text); box-shadow: 0 6px 20px rgba(0,0,0,.18); animation: pop .3s ease;
+}
 .room-item.tappable { pointer-events: auto; cursor: pointer; }
 .room-pet { position: absolute; left: 0; top: 0; cursor: pointer; will-change: transform; -webkit-tap-highlight-color: transparent; }
 .sprite { background-repeat: no-repeat; flex: none; }
@@ -820,6 +827,11 @@ h1, h2 { margin: 0; }
 .fullness { display: block; height: 8px; border-radius: 99px; background: var(--surface-2); border: 1px solid var(--border); overflow: hidden; }
 .fullness > span { display: block; height: 100%; background: #f2a541; border-radius: 99px; }
 .fullness.low > span { background: #e57373; }
+.furniture-list { list-style: none; margin: 0 0 4px; padding: 0; display: grid; gap: 3px; }
+.furniture-list li { display: flex; gap: 6px; align-items: center; }
+.furniture-list li.open { color: var(--text); }
+.furniture-list li > span:first-child { width: 18px; text-align: center; }
+.furniture-hours { margin-left: auto; font-size: 12px; }
 .pet-next { display: grid; gap: 6px; font-size: 13px; color: var(--muted); background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 10px 14px; }
 
 .species-groups { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 16px; margin-bottom: 14px; }
