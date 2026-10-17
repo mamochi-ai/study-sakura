@@ -3,7 +3,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react
 import { createReview, db, REVIEW_STATUS, uid, type InkItem, type Note, type Stroke } from '../db';
 import { formatDate } from '../lib/format';
 import { markerByInkColor, MARKERS, RED_PENS } from '../lib/memorize';
-import { getSettings, updateSettings, useSettings } from '../lib/settings';
+import { getSettings, useSettings } from '../lib/settings';
 import { shortTitle, useStudyBus } from '../views/studyBus';
 import { MemorizeControls } from './Memorize';
 import { askText, toast } from './Modal';
@@ -89,6 +89,19 @@ function strokeHits(s: Stroke, x: number, y: number, r: number) {
   if (p.length === 3) return Math.hypot(p[0] - x, p[1] - y) <= rr;
   for (let i = 3; i < p.length; i += 3) if (distToSegment(x, y, p[i - 3], p[i - 2], p[i], p[i + 1]) <= rr) return true;
   return false;
+}
+
+/** ほとんど動いていない線（ペンで軽くタップしただけ） */
+function isTiny(s: Stroke) {
+  const p = s.points;
+  let x0 = p[0], x1 = p[0], y0 = p[1], y1 = p[1];
+  for (let i = 3; i < p.length; i += 3) {
+    x0 = Math.min(x0, p[i]);
+    x1 = Math.max(x1, p[i]);
+    y0 = Math.min(y0, p[i + 1]);
+    y1 = Math.max(y1, p[i + 1]);
+  }
+  return x1 - x0 < 10 && y1 - y0 < 10;
 }
 
 const hasPressure = (s: Stroke) => {
@@ -209,8 +222,8 @@ export default function InkEditor({ note }: { note: Note }) {
   itemsRef.current = items;
   const memorizeRef = useRef(memorize);
   memorizeRef.current = memorize;
-  const fingerDraw = useRef(settings.fingerDraw);
-  fingerDraw.current = settings.fingerDraw;
+  // 指で書く機能は使われないのでやめた（指はスクロール・ピンチ専用）
+  const fingerDraw = useRef(false);
 
   useEffect(() => {
     try {
@@ -788,6 +801,11 @@ export default function InkEditor({ note }: { note: Note }) {
       if (d && d.pointerId === e.pointerId) {
         dragging.current = null;
         const now = itemsRef.current.find((i) => i.id === d.orig.id);
+        // 動かさずに 📖 をタップしたときは、参考書のそのページへ
+        if (t && now && now.x === d.orig.x && now.y === d.orig.y && now.w === d.orig.w) {
+          runTapAction(e.clientX, e.clientY);
+          return;
+        }
         if (now && (now.x !== d.orig.x || now.y !== d.orig.y || now.w !== d.orig.w)) {
           commit({ remI: [d.orig], addI: [now] });
           growTo(now.y + (now.h ?? 120));
@@ -801,7 +819,7 @@ export default function InkEditor({ note }: { note: Note }) {
       const l = live.current;
       if (l && l.pointerId === e.pointerId) {
         // ページリンクなどの上を軽くタップしただけなら、点は書かずにボタンとして扱う
-        if (t && l.stroke.points.length <= 6 && runTapAction(e.clientX, e.clientY)) {
+        if (t && isTiny(l.stroke) && runTapAction(e.clientX, e.clientY)) {
           live.current = null;
           scheduleDirty();
           return;
@@ -1087,13 +1105,6 @@ export default function InkEditor({ note }: { note: Note }) {
         </details>
         <button className={`icon-btn tool${prefs.tool === 'flag' ? ' active' : ''}`} onClick={() => set({ tool: prefs.tool === 'flag' ? 'pen' : 'flag' })} title="復習マーク（押してから、付けたい場所をタップ）">🚩</button>
         <PaperPicker note={note} />
-        <button
-          className={`icon-btn${settings.fingerDraw ? ' active' : ''}`}
-          onClick={() => updateSettings({ fingerDraw: !settings.fingerDraw })}
-          title={settings.fingerDraw ? '指でも書く：オン（2本指でスクロール）' : '指でも書く：オフ（指はスクロール）'}
-        >
-          ☝️
-        </button>
         <span className="tb-spacer" />
         <MemorizeControls
           active={memorize}
@@ -1104,6 +1115,11 @@ export default function InkEditor({ note }: { note: Note }) {
         />
       </div>
       {memorize && <div className="memorize-banner">暗記シート中：隠れているところをタップすると表示されます（もう一度タップで隠す）。この間は書けません。</div>}
+      {prefs.tool === 'select' && (
+        <div className="flag-banner select-banner">
+          ✋ 選択中：貼り付けた画像・引用・ページリンクを指やペンでドラッグして移動、右下の ○ で大きさ変更、✕ で削除。📖 をタップすると参考書のそのページへ。書くときは ✒️ に戻してください
+        </div>
+      )}
       {prefs.tool === 'flag' && <div className="flag-banner">🚩 復習マークを付けたい場所をタップしてください</div>}
       <div ref={scrollRef} className="note-scroll ink-scroll" onScroll={updateTiles}>
         {/* タイトルは文字入力欄にしない（ペンで書いたときに iPad のスクリブルが反応しないように） */}
@@ -1164,7 +1180,7 @@ export default function InkEditor({ note }: { note: Note }) {
       </div>
       <div className="note-status">
         <span>
-          {settings.fingerDraw ? '指でも書けます（2本指でスクロール・ピンチ）' : 'Pencil で書く・指でスクロール・2本指で拡大縮小'}
+          Pencil で書く・指でスクロール・2本指で拡大縮小
           {Math.abs(zoom - 1) > 0.01 && (
             <button className="zoom-reset" onClick={() => applyZoom(1)} title="用紙の幅に戻す">
               🔍 {Math.round(zoom * 100)}%（戻す）
