@@ -27,7 +27,12 @@ export function NoteTabs({
 
   // 選んだタブが見えるようにスクロール
   useEffect(() => {
-    stripRef.current?.querySelector('.note-tab.active')?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    // scrollIntoView は画面全体までずらすことがあるので、タブの列だけを横に動かす
+    const strip = stripRef.current;
+    const tab = strip?.querySelector<HTMLElement>('.note-tab.active');
+    if (!strip || !tab) return;
+    if (tab.offsetLeft < strip.scrollLeft) strip.scrollLeft = tab.offsetLeft;
+    else if (tab.offsetLeft + tab.offsetWidth > strip.scrollLeft + strip.clientWidth) strip.scrollLeft = tab.offsetLeft + tab.offsetWidth - strip.clientWidth;
   }, [activeId]);
 
   const create = async (kind: NoteKind) => onSelect((await createNote(binderId, kind)).id);

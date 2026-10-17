@@ -22,6 +22,18 @@ document.addEventListener('click', (e) => {
   item?.closest('details.menu')?.removeAttribute('open');
 });
 
+// 画面全体がずれて上が隠れることがあるので、文字入力中以外は常に元の位置に戻す
+// （キーボードが出ているときは iPad に任せる）
+const resetPageScroll = () => {
+  if (window.scrollX === 0 && window.scrollY === 0) return;
+  const a = document.activeElement as HTMLElement | null;
+  if (a && (a.isContentEditable || a.matches('input, textarea, select'))) return;
+  window.scrollTo(0, 0);
+};
+window.addEventListener('scroll', resetPageScroll, { passive: true });
+document.addEventListener('focusout', () => setTimeout(resetPageScroll, 300));
+window.visualViewport?.addEventListener('resize', () => setTimeout(resetPageScroll, 300));
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <App />

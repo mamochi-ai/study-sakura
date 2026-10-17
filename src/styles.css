@@ -61,6 +61,7 @@
 
 * { box-sizing: border-box; }
 html, body, #root { height: 100%; margin: 0; }
+html { overflow: hidden; }
 body {
   background: var(--bg); overflow: hidden; overscroll-behavior: none; touch-action: manipulation; -webkit-text-size-adjust: 100%;
   /* 手のひらや長押しで文字の選択が始まると、ペンや仕切りの操作が効かなくなるので、選択できるのは入力欄と本文だけにする */
@@ -397,7 +398,11 @@ h1, h2 { margin: 0; }
 .outline button:hover:not(:disabled) { background: var(--surface-2); }
 .outline button:disabled { cursor: default; color: var(--muted); }
 .bookmark-item { display: flex; align-items: center; }
-.bookmark-item > button:first-child { flex: 1; }
+.bookmark-item > button:first-child { flex: 1; min-width: 0; }
+/* 外すボタンは小さいまま（一覧のボタン共通の幅 100% を打ち消す） */
+.bookmark-item > .icon-btn { width: auto; flex: 0 0 auto; margin-right: 6px; justify-content: center; }
+.bookmark-label { overflow-wrap: anywhere; }
+.outline small { flex-shrink: 0; }
 .snippet mark { background: #fff176; color: #222; }
 
 /* pdf.js テキストレイヤー（文字選択用） */
