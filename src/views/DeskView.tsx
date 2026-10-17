@@ -41,7 +41,7 @@ export default function DeskView({ onOpenBinder }: { onOpenBinder: (id: string) 
     >
       <header className="desk-header">
         <h1 className="logo">
-          <span className="logo-mark">🌸</span> Study Sakura
+          <span className="logo-mark">🌸</span> My Study
         </h1>
         <div className="desk-actions">
           <button className="btn" onClick={() => fileRef.current?.click()}>📕 参考書を追加</button>

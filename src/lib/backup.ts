@@ -1,5 +1,6 @@
 import { db, type Book } from '../db';
 
+// 形式名は旧名のまま（以前のバックアップも復元できるように）
 const FORMAT = 'study-sakura-backup';
 
 async function blobToBase64(blob: Blob): Promise<string> {
@@ -42,13 +43,13 @@ export async function exportBackup() {
   const payload = { format: FORMAT, version: 1, exportedAt: new Date().toISOString(), books: encodedBooks, binders, notes, bookmarks, sessions, strokes };
   const d = new Date();
   const stamp = `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`;
-  downloadBlob(new Blob([JSON.stringify(payload)], { type: 'application/json' }), `study-sakura-${stamp}.json`);
+  downloadBlob(new Blob([JSON.stringify(payload)], { type: 'application/json' }), `my-study-${stamp}.json`);
 }
 
 /** バックアップを読み込む。同じ ID のデータは上書きされる */
 export async function importBackup(file: File) {
   const payload = JSON.parse(await file.text());
-  if (payload?.format !== FORMAT) throw new Error('Study Sakura のバックアップファイルではありません');
+  if (payload?.format !== FORMAT) throw new Error('My Study のバックアップファイルではありません');
   const books: Book[] = payload.books.map(({ data, fileType, ...rest }: { data: string; fileType: string } & Omit<Book, 'file'>) => ({
     ...rest,
     file: base64ToBlob(data, fileType),

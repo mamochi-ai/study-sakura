@@ -14,8 +14,8 @@ export default defineConfig({
       registerType: 'prompt',
       includeAssets: ['favicon.svg', 'apple-touch-icon.png'],
       manifest: {
-        name: 'Study Sakura',
-        short_name: 'Study Sakura',
+        name: 'My Study',
+        short_name: 'My Study',
         description: '参考書（PDF）とノートを並べて勉強するノートアプリ',
         lang: 'ja',
         start_url: base,
