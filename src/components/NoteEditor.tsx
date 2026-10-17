@@ -80,12 +80,8 @@ export default function NoteEditor({ note, onSaved }: { note: Note; onSaved?: ()
   // 2 本指タップで元に戻す・3 本指タップでやり直す
   useMultiTapUndo(
     scrollRef,
-    () => {
-      if (editorRef.current?.commands.undo()) toast('↶ 元に戻しました');
-    },
-    () => {
-      if (editorRef.current?.commands.redo()) toast('↷ やり直しました');
-    },
+    () => editorRef.current?.commands.undo(),
+    () => editorRef.current?.commands.redo(),
   );
 
   const titleRef = useRef(title);
