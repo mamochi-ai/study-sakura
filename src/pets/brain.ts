@@ -19,7 +19,7 @@ const NEXT: Record<PetState, PetState[]> = {
   happy: ['idle', 'walk'],
   hungry: ['idle', 'walk', 'surprise'],
   sleep: ['idle', 'surprise'],
-  play: ['idle', 'happy'],
+  play: ['idle', 'happy', 'surprise'],
   interact: ['idle', 'happy'],
   surprise: ['idle'],
 };
