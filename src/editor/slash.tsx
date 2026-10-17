@@ -115,7 +115,11 @@ export function SlashMenu() {
   );
   const listRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    listRef.current?.querySelector('.active')?.scrollIntoView({ block: 'nearest' });
+    const list = listRef.current;
+    const item = list?.querySelector<HTMLElement>('.active');
+    if (!list || !item) return;
+    if (item.offsetTop < list.scrollTop) list.scrollTop = item.offsetTop;
+    else if (item.offsetTop + item.offsetHeight > list.scrollTop + list.clientHeight) list.scrollTop = item.offsetTop + item.offsetHeight - list.clientHeight;
   }, [m?.index]);
   if (!m || !m.rect || m.items.length === 0) return null;
   const below = m.rect.bottom + 320 < window.innerHeight;

@@ -31,7 +31,12 @@ export function scrollToReviewElement(id: string) {
   const find = () => {
     const el = document.querySelector<HTMLElement>(`[data-review-id="${id}"]`);
     if (el) {
-      el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      // ノートの中だけをスクロールする（画面全体はずらさない）
+      const sc = el.closest<HTMLElement>('.note-scroll');
+      if (sc) {
+        const r = el.getBoundingClientRect(), sr = sc.getBoundingClientRect();
+        sc.scrollTo({ top: sc.scrollTop + r.top - sr.top - sc.clientHeight / 2 + r.height / 2, left: sc.scrollLeft + r.left - sr.left - 40, behavior: 'smooth' });
+      }
       el.classList.remove('flash');
       void el.offsetWidth;
       el.classList.add('flash');

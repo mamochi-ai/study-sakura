@@ -365,8 +365,8 @@ function Bookmarks({ bookId, page, onGo }: { bookId: string; page: number; onGo:
       {marks.map((m) => (
         <li key={m.id} className="bookmark-item">
           <button onClick={() => onGo(m.page)}>
-            <span>🔖 {m.label || `p.${m.page}`}</span>
-            <small className="muted">{m.page}</small>
+            <span className="bookmark-label">🔖 {m.label || `p.${m.page}`}</span>
+            <small className="muted">p.{m.page}</small>
           </button>
           <button className="icon-btn tiny" onClick={() => db.bookmarks.delete(m.id)} title="しおりを外す" aria-label="しおりを外す">✕</button>
         </li>
