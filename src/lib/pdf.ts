@@ -58,20 +58,23 @@ export interface OutlineItem {
   items: OutlineItem[];
 }
 
+/** PDF 内の飛び先（名前付き / 直接指定）をページ番号にする */
+async function resolveDest(doc: PDFDocumentProxy, dest: unknown): Promise<number | null> {
+  try {
+    const explicit = typeof dest === 'string' ? await doc.getDestination(dest) : (dest as unknown[]);
+    if (!explicit || !explicit[0]) return null;
+    const ref = explicit[0];
+    if (typeof ref === 'number') return ref + 1;
+    return (await doc.getPageIndex(ref as never)) + 1;
+  } catch {
+    return null;
+  }
+}
+
 export async function getOutline(doc: PDFDocumentProxy): Promise<OutlineItem[]> {
   const raw = await doc.getOutline();
   if (!raw) return [];
-  const resolve = async (dest: unknown): Promise<number | null> => {
-    try {
-      const explicit = typeof dest === 'string' ? await doc.getDestination(dest) : (dest as unknown[]);
-      if (!explicit || !explicit[0]) return null;
-      const ref = explicit[0];
-      if (typeof ref === 'number') return ref + 1;
-      return (await doc.getPageIndex(ref as never)) + 1;
-    } catch {
-      return null;
-    }
-  };
+  const resolve = (dest: unknown) => resolveDest(doc, dest);
   const walk = async (items: typeof raw): Promise<OutlineItem[]> =>
     Promise.all(items.map(async (it) => ({ title: it.title, page: await resolve(it.dest), items: await walk(it.items ?? []) })));
   return walk(raw);
@@ -93,6 +96,38 @@ export function getAllText(doc: PDFDocumentProxy): Promise<string[]> {
       return out;
     })();
     textCache.set(doc, p);
+  }
+  return p;
+}
+
+/** ページ内のリンク（目次の項目など）。rect は PDF の座標 */
+export interface PageLink {
+  rect: [number, number, number, number];
+  page?: number;
+  url?: string;
+}
+
+const linkCache = new WeakMap<PDFDocumentProxy, Map<number, Promise<PageLink[]>>>();
+
+export function getPageLinks(doc: PDFDocumentProxy, pageNumber: number): Promise<PageLink[]> {
+  let m = linkCache.get(doc);
+  if (!m) linkCache.set(doc, (m = new Map()));
+  let p = m.get(pageNumber);
+  if (!p) {
+    p = (async () => {
+      const page = await doc.getPage(pageNumber);
+      const annots = await page.getAnnotations({ intent: 'display' });
+      const out: PageLink[] = [];
+      for (const a of annots) {
+        if (a.subtype !== 'Link' || !a.rect) continue;
+        if (a.dest) {
+          const target = await resolveDest(doc, a.dest);
+          if (target) out.push({ rect: a.rect, page: target });
+        } else if (a.url && /^https?:/i.test(a.url)) out.push({ rect: a.rect, url: a.url });
+      }
+      return out;
+    })().catch(() => []);
+    m.set(pageNumber, p);
   }
   return p;
 }

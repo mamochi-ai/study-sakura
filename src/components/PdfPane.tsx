@@ -38,6 +38,8 @@ export const PdfPane = forwardRef<PdfPaneHandle, Props>(function PdfPane(
   const [sidebar, setSidebar] = useState<'outline' | 'bookmarks' | 'search' | null>(null);
   const [selection, setSelection] = useState<{ text: string; page: number; x: number; y: number; bottom: number } | null>(null);
   const pendingPage = useRef<number | null>(null);
+  /** PDF 内のリンクで飛んだときの戻り先 */
+  const [backTo, setBackTo] = useState<number | null>(null);
   const pageRef = useRef(page);
   pageRef.current = page;
 
@@ -224,8 +226,18 @@ export const PdfPane = forwardRef<PdfPaneHandle, Props>(function PdfPane(
               onTextSelect={setSelection}
               onFitWidth={setFitScale}
               onCtrlWheel={onCtrlWheel}
+              onLinkPage={(p) => {
+                setBackTo(pageRef.current);
+                goTo(p, true);
+              }}
               onPinchZoom={(f) => setZoom(Math.min(4, Math.max(0.3, Math.round(scale * f * 100) / 100)))}
             />
+          )}
+          {backTo !== null && (
+            <div className="link-back">
+              <button className="btn small" onClick={() => { goTo(backTo, true); setBackTo(null); }}>↩ p.{backTo} に戻る</button>
+              <button className="icon-btn tiny" onClick={() => setBackTo(null)} aria-label="閉じる">✕</button>
+            </div>
           )}
           {capture && <div className="capture-hint">ノートに貼りたい範囲をドラッグ　<button className="btn small" onClick={() => setCapture(false)}>終了</button></div>}
         </div>
