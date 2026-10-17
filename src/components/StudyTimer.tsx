@@ -89,7 +89,7 @@ export function StudyTimer({ binderId }: { binderId: string }) {
         const next = phase === 'work' ? 'break' : 'work';
         const msg = next === 'break' ? 'おつかれさま！休憩しましょう ☕' : '休憩終わり。集中タイムです ✏️';
         toast(msg);
-        if ('Notification' in window && Notification.permission === 'granted') new Notification('Study Sakura', { body: msg });
+        if ('Notification' in window && Notification.permission === 'granted') new Notification('My Study', { body: msg });
         setPhase(next);
         setRunning(false);
         setEndAt(null);

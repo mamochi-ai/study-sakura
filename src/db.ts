@@ -97,6 +97,7 @@ class StudyDB extends Dexie {
   strokes!: Table<Stroke, string>;
 
   constructor() {
+    // 保存データの名前は変えない（変えると既存のノートが読めなくなる）
     super('study-sakura');
     this.version(1).stores({
       books: 'id, createdAt, lastOpenedAt',
