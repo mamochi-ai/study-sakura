@@ -955,18 +955,8 @@ export default function InkEditor({ note }: { note: Note }) {
 
   // 指のジェスチャー（2 本指タップ／3 本指タップ）から呼ぶ
   const historyRef = useRef({ undo: () => {}, redo: () => {} });
-  historyRef.current = {
-    undo: () => {
-      if (!undoStack.current.length) return toast('これ以上は戻せません');
-      undo();
-      toast('↶ 元に戻しました');
-    },
-    redo: () => {
-      if (!redoStack.current.length) return toast('やり直すものはありません');
-      redo();
-      toast('↷ やり直しました');
-    },
-  };
+  // 書いている途中の邪魔にならないよう、メッセージは出さない
+  historyRef.current = { undo, redo };
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {

@@ -431,6 +431,9 @@ h1, h2 { margin: 0; }
 }
 .note-tab.active { background: var(--surface); color: var(--text); font-weight: 600; margin-bottom: -1px; border-top: 3px solid var(--binder-color); }
 .note-tab-icon { margin-right: 4px; font-size: .9em; }
+.note-tabs { position: relative; }
+.note-tab.dragging { position: relative; z-index: 2; box-shadow: 0 4px 12px rgba(0,0,0,.2); opacity: .95; transition: none; }
+.note-tab-marker { position: absolute; top: 4px; bottom: 0; width: 3px; border-radius: 2px; background: var(--accent); pointer-events: none; }
 
 /* ノート一覧（タブの ☰ から開く） */
 .note-list-backdrop { position: absolute; inset: 0; z-index: 29; background: rgba(30, 20, 10, .12); }
