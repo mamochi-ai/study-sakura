@@ -7,6 +7,7 @@ import { getSettings, useSettings } from '../lib/settings';
 import { shortTitle, useStudyBus } from '../views/studyBus';
 import { MemorizeControls } from './Memorize';
 import { askText, toast } from './Modal';
+import { MultiTap } from '../lib/multiTap';
 import { notePaper, PaperPicker } from './PaperPicker';
 import { openReview } from './Review';
 
@@ -638,7 +639,7 @@ export default function InkEditor({ note }: { note: Note }) {
       const target = e.target as HTMLElement;
       const itemEl = target.closest<HTMLElement>('[data-item-id]');
       // 選択ツールでは、指でも画像などを動かせる
-      const selectTouch = e.pointerType === 'touch' && tool === 'select' && (itemEl || target.closest('[data-handle]'));
+      const selectTouch = e.pointerType === 'touch' && tool === 'select' && (itemEl || target.closest('[data-handle], [data-delete]'));
       if (!drawsWith(e) && !selectTouch) return;
       if (e.pointerType === 'mouse' && e.button !== 0) return;
       e.preventDefault();
@@ -809,6 +810,8 @@ export default function InkEditor({ note }: { note: Note }) {
       samples: { t: number; x: number; y: number }[];
     };
     let g: Gesture | null = null;
+    /** 2 本指タップで元に戻す・3 本指タップでやり直す */
+    const multi = new MultiTap();
     let momentum = 0;
     const stopMomentum = () => cancelAnimationFrame(momentum);
     const mid = (t: TouchList) => {
@@ -835,6 +838,7 @@ export default function InkEditor({ note }: { note: Note }) {
       }
       g = null;
       blocked = true;
+      multi.cancel();
     }
 
     const onTouchStart = (e: TouchEvent) => {
@@ -846,6 +850,7 @@ export default function InkEditor({ note }: { note: Note }) {
         return;
       }
       if (blocked) return;
+      multi.start(e);
       // 指が増えたら、その位置から数え直す（何本でもスクロール）
       const wasMoved = g?.moved ?? false;
       begin(e);
@@ -859,6 +864,7 @@ export default function InkEditor({ note }: { note: Note }) {
         cancelPan();
         return;
       }
+      multi.move(e);
       const m = mid(e.touches);
       if (Math.hypot(m.x - g.x, m.y - g.y) > TAP_SLOP) g.moved = true;
       // 少し動くまではスクロールしない（手を置いただけで動かないように）
@@ -872,6 +878,13 @@ export default function InkEditor({ note }: { note: Note }) {
 
     const onTouchEnd = (e: TouchEvent) => {
       if (e.touches.length === 0) blocked = false;
+      const fingers = multi.end(e);
+      if (fingers) {
+        g = null;
+        if (fingers === 2) historyRef.current.undo();
+        else historyRef.current.redo();
+        return;
+      }
       const p = g;
       if (!p) return;
       if (e.touches.length > 0) {
@@ -938,6 +951,21 @@ export default function InkEditor({ note }: { note: Note }) {
       return;
     }
     commit({ remI: [it] });
+  };
+
+  // 指のジェスチャー（2 本指タップ／3 本指タップ）から呼ぶ
+  const historyRef = useRef({ undo: () => {}, redo: () => {} });
+  historyRef.current = {
+    undo: () => {
+      if (!undoStack.current.length) return toast('これ以上は戻せません');
+      undo();
+      toast('↶ 元に戻しました');
+    },
+    redo: () => {
+      if (!redoStack.current.length) return toast('やり直すものはありません');
+      redo();
+      toast('↷ やり直しました');
+    },
   };
 
   useEffect(() => {
