@@ -1,5 +1,5 @@
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { pdfjs, type PDFDocumentProxy } from '../lib/pdf';
+import { getPageLinks, pdfjs, type PageLink, type PDFDocumentProxy } from '../lib/pdf';
 
 export interface PdfViewerHandle {
   goTo: (page: number, smooth?: boolean) => void;
@@ -19,12 +19,14 @@ interface Props {
   onCtrlWheel: (deltaY: number) => void;
   /** 2本指のピンチ操作が終わったときの拡大率（今の何倍か） */
   onPinchZoom: (factor: number) => void;
+  /** PDF の中のリンク（目次など）でページへ飛ぶ */
+  onLinkPage: (page: number) => void;
 }
 
 const GAP = 12;
 
 export const PdfViewer = forwardRef<PdfViewerHandle, Props>(function PdfViewer(
-  { doc, scale, initialPage, captureMode, onPageChange, onCapture, onTextSelect, onFitWidth, onCtrlWheel, onPinchZoom },
+  { doc, scale, initialPage, captureMode, onPageChange, onCapture, onTextSelect, onFitWidth, onCtrlWheel, onPinchZoom, onLinkPage },
   ref,
 ) {
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -255,6 +257,7 @@ export const PdfViewer = forwardRef<PdfViewerHandle, Props>(function PdfViewer(
             root={scrollRef}
             captureMode={captureMode}
             onCapture={onCapture}
+            onLinkPage={onLinkPage}
           />
         ))}
       </div>
@@ -272,6 +275,7 @@ function PdfPage({
   root,
   captureMode,
   onCapture,
+  onLinkPage,
 }: {
   doc: PDFDocumentProxy;
   pageNumber: number;
@@ -282,6 +286,7 @@ function PdfPage({
   root: React.RefObject<HTMLDivElement>;
   captureMode: boolean;
   onCapture: Props['onCapture'];
+  onLinkPage: Props['onLinkPage'];
 }) {
   const wrapRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLDivElement>(null);
@@ -289,6 +294,7 @@ function PdfPage({
   const [visible, setVisible] = useState(false);
   const [rendered, setRendered] = useState(false);
   const [drag, setDrag] = useState<{ x0: number; y0: number; x1: number; y1: number } | null>(null);
+  const [links, setLinks] = useState<(PageLink & { box: number[] })[]>([]);
 
   useEffect(() => {
     const el = wrapRef.current;
@@ -324,6 +330,17 @@ function PdfPage({
       // 描画が終わってから差し替えるので、拡大中もチラつかない
       canvasRef.current.replaceChildren(canvas);
       setRendered(true);
+
+      // 目次などのリンクを、押せる透明な枠として重ねる
+      getPageLinks(doc, pageNumber).then((ls) => {
+        if (cancelled) return;
+        setLinks(
+          ls.map((l) => {
+            const [x1, y1, x2, y2] = vp.convertToViewportRectangle(l.rect);
+            return { ...l, box: [Math.min(x1, x2), Math.min(y1, y2), Math.abs(x2 - x1), Math.abs(y2 - y1)] };
+          }),
+        );
+      });
 
       const tl = textRef.current;
       if (tl) {
@@ -363,6 +380,32 @@ function PdfPage({
       <div ref={canvasRef} className="pdf-canvas-holder" />
       {!rendered && <div className="pdf-page-num">{pageNumber}</div>}
       <div ref={textRef} className="textLayer" />
+      {!captureMode && links.length > 0 && (
+        <div className="pdf-link-layer">
+          {links.map((l, i) =>
+            l.page ? (
+              <button
+                key={i}
+                className="pdf-link"
+                style={{ left: l.box[0], top: l.box[1], width: l.box[2], height: l.box[3] }}
+                onClick={() => onLinkPage(l.page!)}
+                aria-label={`${l.page} ページへ`}
+                title={`p.${l.page} へ`}
+              />
+            ) : (
+              <a
+                key={i}
+                className="pdf-link"
+                href={l.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{ left: l.box[0], top: l.box[1], width: l.box[2], height: l.box[3] }}
+                title={l.url}
+              />
+            ),
+          )}
+        </div>
+      )}
       {captureMode && (
         <div
           className="capture-layer"
