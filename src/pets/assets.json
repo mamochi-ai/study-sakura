@@ -1,0 +1,1287 @@
+{
+ "cell": 256,
+ "anchor": [
+  128,
+  232
+ ],
+ "pets": {
+  "shiba": {
+   "animations": {
+    "idle": {
+     "file": "dogs/shiba/idle.webp",
+     "frames": 1,
+     "frameMs": 1000,
+     "loop": true
+    },
+    "walk_front": {
+     "file": "dogs/shiba/walk_front.webp",
+     "frames": 8,
+     "frameMs": 100,
+     "loop": true
+    },
+    "walk_right": {
+     "file": "dogs/shiba/walk_right.webp",
+     "frames": 8,
+     "frameMs": 100,
+     "loop": true
+    },
+    "walk_left": {
+     "file": "dogs/shiba/walk_left.webp",
+     "frames": 8,
+     "frameMs": 100,
+     "loop": true
+    },
+    "walk_back": {
+     "file": "dogs/shiba/walk_back.webp",
+     "frames": 8,
+     "frameMs": 100,
+     "loop": true
+    },
+    "eat": {
+     "file": "dogs/shiba/eat.webp",
+     "frames": 8,
+     "frameMs": 140,
+     "loop": true,
+     "sequence": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      6,
+      5,
+      4,
+      3,
+      2,
+      1
+     ]
+    },
+    "hungry": {
+     "file": "dogs/shiba/hungry.webp",
+     "frames": 8,
+     "frameMs": 180,
+     "loop": true,
+     "sequence": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      6,
+      5,
+      4,
+      3,
+      2,
+      1
+     ]
+    },
+    "sleep": {
+     "file": "dogs/shiba/sleep.webp",
+     "frames": 8,
+     "frameMs": 320,
+     "loop": true,
+     "sequence": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      6,
+      5,
+      4,
+      3,
+      2,
+      1
+     ]
+    },
+    "play": {
+     "file": "dogs/shiba/play.webp",
+     "frames": 8,
+     "frameMs": 150,
+     "loop": true,
+     "hidesBall": true
+    },
+    "happy": {
+     "file": "dogs/shiba/happy.webp",
+     "frames": 8,
+     "frameMs": 130,
+     "loop": true
+    },
+    "surprise": {
+     "file": "dogs/shiba/surprise.webp",
+     "frames": 8,
+     "frameMs": 110,
+     "loop": false,
+     "returnTo": "idle"
+    }
+   }
+  },
+  "golden": {
+   "animations": {
+    "idle": {
+     "file": "dogs/golden/idle.webp",
+     "frames": 1,
+     "frameMs": 1000,
+     "loop": true
+    },
+    "walk_front": {
+     "file": "dogs/golden/walk_front.webp",
+     "frames": 8,
+     "frameMs": 100,
+     "loop": true
+    },
+    "walk_right": {
+     "file": "dogs/golden/walk_right.webp",
+     "frames": 8,
+     "frameMs": 100,
+     "loop": true
+    },
+    "walk_left": {
+     "file": "dogs/golden/walk_left.webp",
+     "frames": 8,
+     "frameMs": 100,
+     "loop": true
+    },
+    "walk_back": {
+     "file": "dogs/golden/walk_back.webp",
+     "frames": 8,
+     "frameMs": 100,
+     "loop": true
+    },
+    "eat": {
+     "file": "dogs/golden/eat.webp",
+     "frames": 8,
+     "frameMs": 140,
+     "loop": true,
+     "sequence": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      6,
+      5,
+      4,
+      3,
+      2,
+      1
+     ]
+    },
+    "hungry": {
+     "file": "dogs/golden/hungry.webp",
+     "frames": 8,
+     "frameMs": 180,
+     "loop": true,
+     "sequence": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      6,
+      5,
+      4,
+      3,
+      2,
+      1
+     ]
+    },
+    "sleep": {
+     "file": "dogs/golden/sleep.webp",
+     "frames": 8,
+     "frameMs": 320,
+     "loop": true,
+     "sequence": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      6,
+      5,
+      4,
+      3,
+      2,
+      1
+     ]
+    },
+    "play": {
+     "file": "dogs/golden/play.webp",
+     "frames": 8,
+     "frameMs": 150,
+     "loop": true,
+     "hidesBall": true
+    },
+    "happy": {
+     "file": "dogs/golden/happy.webp",
+     "frames": 8,
+     "frameMs": 130,
+     "loop": true
+    },
+    "surprise": {
+     "file": "dogs/golden/surprise.webp",
+     "frames": 8,
+     "frameMs": 110,
+     "loop": false,
+     "returnTo": "idle"
+    }
+   }
+  },
+  "corgi": {
+   "animations": {
+    "idle": {
+     "file": "dogs/corgi/idle.webp",
+     "frames": 1,
+     "frameMs": 1000,
+     "loop": true
+    },
+    "walk_front": {
+     "file": "dogs/corgi/walk_front.webp",
+     "frames": 8,
+     "frameMs": 100,
+     "loop": true
+    },
+    "walk_right": {
+     "file": "dogs/corgi/walk_right.webp",
+     "frames": 8,
+     "frameMs": 100,
+     "loop": true
+    },
+    "walk_left": {
+     "file": "dogs/corgi/walk_left.webp",
+     "frames": 8,
+     "frameMs": 100,
+     "loop": true
+    },
+    "walk_back": {
+     "file": "dogs/corgi/walk_back.webp",
+     "frames": 8,
+     "frameMs": 100,
+     "loop": true
+    },
+    "eat": {
+     "file": "dogs/corgi/eat.webp",
+     "frames": 8,
+     "frameMs": 140,
+     "loop": true,
+     "sequence": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      6,
+      5,
+      4,
+      3,
+      2,
+      1
+     ]
+    },
+    "hungry": {
+     "file": "dogs/corgi/hungry.webp",
+     "frames": 8,
+     "frameMs": 180,
+     "loop": true,
+     "sequence": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      6,
+      5,
+      4,
+      3,
+      2,
+      1
+     ]
+    },
+    "sleep": {
+     "file": "dogs/corgi/sleep.webp",
+     "frames": 8,
+     "frameMs": 320,
+     "loop": true,
+     "sequence": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      6,
+      5,
+      4,
+      3,
+      2,
+      1
+     ]
+    },
+    "play": {
+     "file": "dogs/corgi/play.webp",
+     "frames": 8,
+     "frameMs": 150,
+     "loop": true,
+     "hidesBall": true
+    },
+    "happy": {
+     "file": "dogs/corgi/happy.webp",
+     "frames": 8,
+     "frameMs": 130,
+     "loop": true
+    },
+    "surprise": {
+     "file": "dogs/corgi/surprise.webp",
+     "frames": 8,
+     "frameMs": 110,
+     "loop": false,
+     "returnTo": "idle"
+    }
+   }
+  },
+  "tabby": {
+   "animations": {
+    "idle": {
+     "file": "cats/tabby/idle.webp",
+     "frames": 1,
+     "frameMs": 1000,
+     "loop": true
+    },
+    "walk_front": {
+     "file": "cats/tabby/walk_front.webp",
+     "frames": 8,
+     "frameMs": 100,
+     "loop": true
+    },
+    "walk_right": {
+     "file": "cats/tabby/walk_right.webp",
+     "frames": 8,
+     "frameMs": 100,
+     "loop": true
+    },
+    "walk_left": {
+     "file": "cats/tabby/walk_left.webp",
+     "frames": 8,
+     "frameMs": 100,
+     "loop": true
+    },
+    "walk_back": {
+     "file": "cats/tabby/walk_back.webp",
+     "frames": 8,
+     "frameMs": 100,
+     "loop": true
+    },
+    "eat": {
+     "file": "cats/tabby/eat.webp",
+     "frames": 8,
+     "frameMs": 140,
+     "loop": true,
+     "sequence": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      6,
+      5,
+      4,
+      3,
+      2,
+      1
+     ]
+    },
+    "hungry": {
+     "file": "cats/tabby/hungry.webp",
+     "frames": 8,
+     "frameMs": 180,
+     "loop": true,
+     "sequence": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      6,
+      5,
+      4,
+      3,
+      2,
+      1
+     ]
+    },
+    "sleep": {
+     "file": "cats/tabby/sleep.webp",
+     "frames": 8,
+     "frameMs": 320,
+     "loop": true,
+     "sequence": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      6,
+      5,
+      4,
+      3,
+      2,
+      1
+     ]
+    },
+    "play": {
+     "file": "cats/tabby/play.webp",
+     "frames": 8,
+     "frameMs": 150,
+     "loop": true,
+     "hidesBall": true
+    },
+    "happy": {
+     "file": "cats/tabby/happy.webp",
+     "frames": 8,
+     "frameMs": 130,
+     "loop": true
+    },
+    "surprise": {
+     "file": "cats/tabby/surprise.webp",
+     "frames": 8,
+     "frameMs": 110,
+     "loop": false,
+     "returnTo": "idle"
+    }
+   }
+  },
+  "calico": {
+   "animations": {
+    "idle": {
+     "file": "cats/calico/idle.webp",
+     "frames": 1,
+     "frameMs": 1000,
+     "loop": true
+    },
+    "eat": {
+     "file": "cats/calico/eat.webp",
+     "frames": 8,
+     "frameMs": 140,
+     "loop": true,
+     "sequence": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      6,
+      5,
+      4,
+      3,
+      2,
+      1
+     ]
+    },
+    "hungry": {
+     "file": "cats/calico/hungry.webp",
+     "frames": 8,
+     "frameMs": 180,
+     "loop": true,
+     "sequence": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      6,
+      5,
+      4,
+      3,
+      2,
+      1
+     ]
+    },
+    "sleep": {
+     "file": "cats/calico/sleep.webp",
+     "frames": 8,
+     "frameMs": 320,
+     "loop": true,
+     "sequence": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      6,
+      5,
+      4,
+      3,
+      2,
+      1
+     ]
+    },
+    "walk_front": {
+     "file": "cats/calico/walk_front.webp",
+     "frames": 8,
+     "frameMs": 100,
+     "loop": true
+    },
+    "walk_right": {
+     "file": "cats/calico/walk_right.webp",
+     "frames": 8,
+     "frameMs": 100,
+     "loop": true
+    },
+    "walk_left": {
+     "file": "cats/calico/walk_left.webp",
+     "frames": 8,
+     "frameMs": 100,
+     "loop": true
+    },
+    "walk_back": {
+     "file": "cats/calico/walk_back.webp",
+     "frames": 8,
+     "frameMs": 100,
+     "loop": true
+    },
+    "play": {
+     "file": "cats/calico/play.webp",
+     "frames": 8,
+     "frameMs": 150,
+     "loop": true,
+     "hidesBall": true
+    },
+    "happy": {
+     "file": "cats/calico/happy.webp",
+     "frames": 8,
+     "frameMs": 130,
+     "loop": true
+    },
+    "surprise": {
+     "file": "cats/calico/surprise.webp",
+     "frames": 8,
+     "frameMs": 110,
+     "loop": false,
+     "returnTo": "idle"
+    }
+   }
+  },
+  "ragdoll": {
+   "animations": {
+    "idle": {
+     "file": "cats/ragdoll/idle.webp",
+     "frames": 1,
+     "frameMs": 1000,
+     "loop": true
+    },
+    "walk_front": {
+     "file": "cats/ragdoll/walk_front.webp",
+     "frames": 8,
+     "frameMs": 100,
+     "loop": true
+    },
+    "walk_right": {
+     "file": "cats/ragdoll/walk_right.webp",
+     "frames": 8,
+     "frameMs": 100,
+     "loop": true
+    },
+    "walk_left": {
+     "file": "cats/ragdoll/walk_left.webp",
+     "frames": 8,
+     "frameMs": 100,
+     "loop": true
+    },
+    "walk_back": {
+     "file": "cats/ragdoll/walk_back.webp",
+     "frames": 8,
+     "frameMs": 100,
+     "loop": true
+    },
+    "eat": {
+     "file": "cats/ragdoll/eat.webp",
+     "frames": 8,
+     "frameMs": 140,
+     "loop": true,
+     "sequence": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      6,
+      5,
+      4,
+      3,
+      2,
+      1
+     ]
+    },
+    "hungry": {
+     "file": "cats/ragdoll/hungry.webp",
+     "frames": 8,
+     "frameMs": 180,
+     "loop": true,
+     "sequence": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      6,
+      5,
+      4,
+      3,
+      2,
+      1
+     ]
+    },
+    "sleep": {
+     "file": "cats/ragdoll/sleep.webp",
+     "frames": 8,
+     "frameMs": 320,
+     "loop": true,
+     "sequence": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      6,
+      5,
+      4,
+      3,
+      2,
+      1
+     ]
+    },
+    "play": {
+     "file": "cats/ragdoll/play.webp",
+     "frames": 8,
+     "frameMs": 150,
+     "loop": true,
+     "hidesBall": true
+    },
+    "happy": {
+     "file": "cats/ragdoll/happy.webp",
+     "frames": 8,
+     "frameMs": 130,
+     "loop": true
+    },
+    "surprise": {
+     "file": "cats/ragdoll/surprise.webp",
+     "frames": 8,
+     "frameMs": 110,
+     "loop": false,
+     "returnTo": "idle"
+    }
+   }
+  },
+  "marmot": {
+   "animations": {
+    "idle": {
+     "file": "marmot/idle.webp",
+     "frames": 1,
+     "frameMs": 1000,
+     "loop": true
+    },
+    "walk_front": {
+     "file": "marmot/walk_front.webp",
+     "frames": 8,
+     "frameMs": 125,
+     "loop": true
+    },
+    "walk_back": {
+     "file": "marmot/walk_back.webp",
+     "frames": 8,
+     "frameMs": 125,
+     "loop": true
+    },
+    "walk_left": {
+     "file": "marmot/walk_left.webp",
+     "frames": 8,
+     "frameMs": 125,
+     "loop": true
+    },
+    "walk_right": {
+     "file": "marmot/walk_right.webp",
+     "frames": 8,
+     "frameMs": 125,
+     "loop": true
+    },
+    "eat": {
+     "file": "marmot/eat.webp",
+     "frames": 8,
+     "frameMs": 140,
+     "loop": true,
+     "sequence": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      6,
+      5,
+      4,
+      3,
+      2,
+      1
+     ]
+    },
+    "hungry": {
+     "file": "marmot/hungry.webp",
+     "frames": 8,
+     "frameMs": 180,
+     "loop": true,
+     "sequence": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      6,
+      5,
+      4,
+      3,
+      2,
+      1
+     ]
+    },
+    "sleep": {
+     "file": "marmot/sleep.webp",
+     "frames": 8,
+     "frameMs": 320,
+     "loop": true,
+     "sequence": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      6,
+      5,
+      4,
+      3,
+      2,
+      1
+     ]
+    },
+    "play": {
+     "file": "marmot/play.webp",
+     "frames": 8,
+     "frameMs": 150,
+     "loop": true
+    },
+    "happy": {
+     "file": "marmot/happy.webp",
+     "frames": 8,
+     "frameMs": 130,
+     "loop": true
+    },
+    "surprise": {
+     "file": "marmot/surprise.webp",
+     "frames": 8,
+     "frameMs": 110,
+     "loop": false,
+     "returnTo": "idle"
+    }
+   }
+  },
+  "budgie": {
+   "animations": {
+    "idle": {
+     "file": "birds/budgie/idle.webp",
+     "frames": 1,
+     "frameMs": 1000,
+     "loop": true
+    },
+    "walk_front": {
+     "file": "birds/budgie/walk_front.webp",
+     "frames": 8,
+     "frameMs": 100,
+     "loop": true
+    },
+    "walk_right": {
+     "file": "birds/budgie/walk_right.webp",
+     "frames": 8,
+     "frameMs": 100,
+     "loop": true
+    },
+    "walk_left": {
+     "file": "birds/budgie/walk_left.webp",
+     "frames": 8,
+     "frameMs": 100,
+     "loop": true
+    },
+    "walk_back": {
+     "file": "birds/budgie/walk_back.webp",
+     "frames": 8,
+     "frameMs": 100,
+     "loop": true
+    },
+    "eat": {
+     "file": "birds/budgie/eat.webp",
+     "frames": 8,
+     "frameMs": 140,
+     "loop": true,
+     "sequence": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      6,
+      5,
+      4,
+      3,
+      2,
+      1
+     ]
+    },
+    "hungry": {
+     "file": "birds/budgie/hungry.webp",
+     "frames": 8,
+     "frameMs": 180,
+     "loop": true,
+     "sequence": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      6,
+      5,
+      4,
+      3,
+      2,
+      1
+     ]
+    },
+    "sleep": {
+     "file": "birds/budgie/sleep.webp",
+     "frames": 8,
+     "frameMs": 320,
+     "loop": true,
+     "sequence": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      6,
+      5,
+      4,
+      3,
+      2,
+      1
+     ]
+    },
+    "play": {
+     "file": "birds/budgie/play.webp",
+     "frames": 8,
+     "frameMs": 150,
+     "loop": true,
+     "hidesBall": true
+    },
+    "happy": {
+     "file": "birds/budgie/happy.webp",
+     "frames": 8,
+     "frameMs": 130,
+     "loop": true
+    },
+    "surprise": {
+     "file": "birds/budgie/surprise.webp",
+     "frames": 8,
+     "frameMs": 110,
+     "loop": false,
+     "returnTo": "idle"
+    }
+   }
+  },
+  "cockatiel": {
+   "animations": {
+    "idle": {
+     "file": "birds/cockatiel/idle.webp",
+     "frames": 1,
+     "frameMs": 1000,
+     "loop": true
+    },
+    "walk_front": {
+     "file": "birds/cockatiel/walk_front.webp",
+     "frames": 8,
+     "frameMs": 100,
+     "loop": true
+    },
+    "walk_right": {
+     "file": "birds/cockatiel/walk_right.webp",
+     "frames": 8,
+     "frameMs": 100,
+     "loop": true
+    },
+    "walk_left": {
+     "file": "birds/cockatiel/walk_left.webp",
+     "frames": 8,
+     "frameMs": 100,
+     "loop": true
+    },
+    "walk_back": {
+     "file": "birds/cockatiel/walk_back.webp",
+     "frames": 8,
+     "frameMs": 100,
+     "loop": true
+    },
+    "eat": {
+     "file": "birds/cockatiel/eat.webp",
+     "frames": 8,
+     "frameMs": 140,
+     "loop": true,
+     "sequence": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      6,
+      5,
+      4,
+      3,
+      2,
+      1
+     ]
+    },
+    "hungry": {
+     "file": "birds/cockatiel/hungry.webp",
+     "frames": 8,
+     "frameMs": 180,
+     "loop": true,
+     "sequence": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      6,
+      5,
+      4,
+      3,
+      2,
+      1
+     ]
+    },
+    "sleep": {
+     "file": "birds/cockatiel/sleep.webp",
+     "frames": 8,
+     "frameMs": 320,
+     "loop": true,
+     "sequence": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      6,
+      5,
+      4,
+      3,
+      2,
+      1
+     ]
+    },
+    "play": {
+     "file": "birds/cockatiel/play.webp",
+     "frames": 8,
+     "frameMs": 150,
+     "loop": true,
+     "hidesBall": true
+    },
+    "happy": {
+     "file": "birds/cockatiel/happy.webp",
+     "frames": 8,
+     "frameMs": 130,
+     "loop": true
+    },
+    "surprise": {
+     "file": "birds/cockatiel/surprise.webp",
+     "frames": 8,
+     "frameMs": 110,
+     "loop": false,
+     "returnTo": "idle"
+    }
+   }
+  },
+  "java_sparrow": {
+   "animations": {
+    "idle": {
+     "file": "birds/java-sparrow/idle.webp",
+     "frames": 1,
+     "frameMs": 1000,
+     "loop": true
+    },
+    "walk_front": {
+     "file": "birds/java-sparrow/walk_front.webp",
+     "frames": 8,
+     "frameMs": 100,
+     "loop": true
+    },
+    "walk_right": {
+     "file": "birds/java-sparrow/walk_right.webp",
+     "frames": 8,
+     "frameMs": 100,
+     "loop": true
+    },
+    "walk_left": {
+     "file": "birds/java-sparrow/walk_left.webp",
+     "frames": 8,
+     "frameMs": 100,
+     "loop": true
+    },
+    "walk_back": {
+     "file": "birds/java-sparrow/walk_back.webp",
+     "frames": 8,
+     "frameMs": 100,
+     "loop": true
+    },
+    "eat": {
+     "file": "birds/java-sparrow/eat.webp",
+     "frames": 8,
+     "frameMs": 140,
+     "loop": true,
+     "sequence": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      6,
+      5,
+      4,
+      3,
+      2,
+      1
+     ]
+    },
+    "hungry": {
+     "file": "birds/java-sparrow/hungry.webp",
+     "frames": 8,
+     "frameMs": 180,
+     "loop": true,
+     "sequence": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      6,
+      5,
+      4,
+      3,
+      2,
+      1
+     ]
+    },
+    "sleep": {
+     "file": "birds/java-sparrow/sleep.webp",
+     "frames": 8,
+     "frameMs": 320,
+     "loop": true,
+     "sequence": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      6,
+      5,
+      4,
+      3,
+      2,
+      1
+     ]
+    },
+    "play": {
+     "file": "birds/java-sparrow/play.webp",
+     "frames": 8,
+     "frameMs": 150,
+     "loop": true,
+     "hidesBall": true
+    },
+    "happy": {
+     "file": "birds/java-sparrow/happy.webp",
+     "frames": 8,
+     "frameMs": 130,
+     "loop": true
+    },
+    "surprise": {
+     "file": "birds/java-sparrow/surprise.webp",
+     "frames": 8,
+     "frameMs": 110,
+     "loop": false,
+     "returnTo": "idle"
+    }
+   }
+  }
+ },
+ "room": {
+  "width": 1536,
+  "height": 1024,
+  "background": "background.webp",
+  "items": {
+   "rug": {
+    "file": "rug.webp",
+    "x": 307,
+    "y": 678,
+    "w": 860,
+    "h": 274,
+    "groundY": 952
+   },
+   "bookshelf": {
+    "file": "bookshelf.webp",
+    "x": 46,
+    "y": 241,
+    "w": 276,
+    "h": 435,
+    "groundY": 676
+   },
+   "plant": {
+    "file": "plant.webp",
+    "x": 1083,
+    "y": 410,
+    "w": 230,
+    "h": 256,
+    "groundY": 666
+   },
+   "bed": {
+    "file": "bed.webp",
+    "x": 100,
+    "y": 570,
+    "w": 445,
+    "h": 280,
+    "groundY": 850
+   },
+   "cushion": {
+    "file": "cushion.webp",
+    "x": 684,
+    "y": 582,
+    "w": 353,
+    "h": 206,
+    "groundY": 788
+   },
+   "cat_tower": {
+    "file": "cat_tower.webp",
+    "x": 1144,
+    "y": 498,
+    "w": 353,
+    "h": 383,
+    "groundY": 881
+   },
+   "bowl": {
+    "file": "bowl.webp",
+    "x": 914,
+    "y": 801,
+    "w": 200,
+    "h": 100,
+    "groundY": 901
+   },
+   "ball": {
+    "file": "ball.webp",
+    "x": 1133,
+    "y": 837,
+    "w": 100,
+    "h": 95,
+    "groundY": 932
+   },
+   "mouse": {
+    "file": "mouse.webp",
+    "x": 630,
+    "y": 905,
+    "w": 123,
+    "h": 58,
+    "groundY": 963
+   }
+  }
+ }
+}

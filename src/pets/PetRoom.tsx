@@ -171,7 +171,7 @@ function PetPicker({ onClose }: { onClose: () => void }) {
     <Modal
       title="ペットを迎える"
       onClose={onClose}
-      width={640}
+      width={660}
       footer={
         <>
           <button className="btn" onClick={onClose}>キャンセル</button>
@@ -186,7 +186,7 @@ function PetPicker({ onClose }: { onClose: () => void }) {
             <div className="species-grid">
               {list.map((s) => (
                 <button key={s.id} className={`species-card${species === s.id ? ' selected' : ''}`} onClick={() => setSpecies(s.id)}>
-                  <Sprite species={s.id} size={88} />
+                  <Sprite species={s.id} size={64} />
                   <span>{s.name}</span>
                 </button>
               ))}
