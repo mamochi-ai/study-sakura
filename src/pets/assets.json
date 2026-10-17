@@ -827,7 +827,8 @@
      "file": "marmot/play.webp",
      "frames": 8,
      "frameMs": 150,
-     "loop": true
+     "loop": true,
+     "hidesBall": true
     },
     "happy": {
      "file": "marmot/happy.webp",
