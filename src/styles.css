@@ -648,8 +648,6 @@ h1, h2 { margin: 0; }
 .ink-dot { border-radius: 50%; background: var(--text); display: block; }
 .ink-menu .swatches { display: flex; gap: 6px; padding: 4px 6px 8px; flex-wrap: wrap; max-width: 240px; }
 .ink-toolbar { flex-wrap: nowrap; }
-.zoom-reset { margin-left: 10px; border: 1px solid var(--border); background: var(--surface); border-radius: 99px; padding: 1px 10px; font-size: 11px; cursor: pointer; }
-.ink-paper { transform-origin: 0 0; will-change: auto; }
 .status-error { color: var(--danger); font-weight: 600; }
 @media (pointer: coarse) {
   .ink-color { width: 30px; height: 30px; }
