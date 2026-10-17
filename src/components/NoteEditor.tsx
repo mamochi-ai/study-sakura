@@ -8,6 +8,7 @@ import { formatDate } from '../lib/format';
 import { useSettings } from '../lib/settings';
 import { insertPageRef, useStudyBus } from '../views/studyBus';
 import { askText, toast } from './Modal';
+import { notePaper, PaperPicker } from './PaperPicker';
 
 const MARKERS = [
   { color: '#fff176', name: '黄' },
@@ -42,7 +43,8 @@ export default function NoteEditor({ note, onSaved }: { note: Note; onSaved?: ()
     content: note.content ?? '',
     autofocus: note.content ? false : 'end',
     editorProps: {
-      attributes: { class: 'note-content', spellcheck: 'false' },
+      // 日本語の文章なので、英語向けの自動修正・自動大文字化は止める
+      attributes: { class: 'note-content', spellcheck: 'false', lang: 'ja', autocorrect: 'off', autocapitalize: 'off' },
       handlePaste: (_view, event) => {
         const files = Array.from(event.clipboardData?.files ?? []).filter((f) => f.type.startsWith('image/'));
         if (!files.length || !editorRef.current) return false;
@@ -154,6 +156,7 @@ mark{padding:0 2px}.page-ref{background:#eef3ff;border-radius:4px;padding:0 4px;
           onImage={() => imageInput.current?.click()}
           onExportHtml={exportHtml}
           memorize={memorize}
+          paper={<PaperPicker note={note} />}
           onMemorize={() => {
             editor.setEditable(memorize);
             setMemorize(!memorize);
@@ -162,7 +165,7 @@ mark{padding:0 2px}.page-ref{background:#eef3ff;border-radius:4px;padding:0 4px;
       )}
       {memorize && <div className="memorize-banner">暗記シート中：赤字と緑マーカーが隠れています。マウスを乗せる（タップする）と見えます。</div>}
       <div className="note-scroll">
-        <div className="note-paper">
+        <div className={`note-paper paper-${notePaper(note)}`}>
           <input
             className="note-title"
             value={title}
@@ -214,12 +217,14 @@ function Toolbar({
   onExportHtml,
   memorize,
   onMemorize,
+  paper,
 }: {
   editor: Editor;
   onImage: () => void;
   onExportHtml: () => void;
   memorize: boolean;
   onMemorize: () => void;
+  paper: React.ReactNode;
 }) {
   const s = useEditorState({
     editor,
@@ -307,6 +312,7 @@ function Toolbar({
           <button onClick={() => editorHooks.insertCurrentPageRef?.(editor)}>📖 表示中のページを参照</button>
         </div>
       </details>
+      {paper}
       <details className="menu">
         <summary className="icon-btn" title="その他の書式">Aa</summary>
         <div className="menu-list">

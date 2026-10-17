@@ -35,10 +35,17 @@ export interface Binder {
   lastOpenedAt?: number;
 }
 
+export type NoteKind = 'text' | 'ink';
+export type Paper = 'plain' | 'lined' | 'grid' | 'dots';
+
 export interface Note {
   id: string;
   binderId: string;
   title: string;
+  /** テキストノート / 手書きノート（未設定はテキスト） */
+  kind?: NoteKind;
+  /** 用紙（未設定は設定画面の既定値） */
+  paper?: Paper;
   content: JSONContent | null;
   /** 検索用のプレーンテキスト */
   text: string;
@@ -48,6 +55,19 @@ export interface Note {
   page?: number;
   createdAt: number;
   updatedAt: number;
+}
+
+/** 手書きの 1 画。座標は用紙の幅を 1000 とした論理座標 */
+export interface Stroke {
+  id: string;
+  noteId: string;
+  tool: 'pen' | 'marker';
+  color: string;
+  /** 論理座標での線の太さ */
+  width: number;
+  /** [x, y, 筆圧, x, y, 筆圧, …] */
+  points: number[];
+  createdAt: number;
 }
 
 /** 参考書のしおり */
@@ -74,6 +94,7 @@ class StudyDB extends Dexie {
   notes!: Table<Note, string>;
   bookmarks!: Table<Bookmark, string>;
   sessions!: Table<StudySession, string>;
+  strokes!: Table<Stroke, string>;
 
   constructor() {
     super('study-sakura');
@@ -84,6 +105,7 @@ class StudyDB extends Dexie {
       bookmarks: 'id, bookId',
       sessions: 'id, binderId, date',
     });
+    this.version(2).stores({ strokes: 'id, noteId' });
   }
 }
 
@@ -148,8 +170,10 @@ export async function createBinder(title: string, color: string, bookIds: string
 }
 
 export async function deleteBinder(binderId: string) {
-  await db.transaction('rw', db.binders, db.notes, db.sessions, async () => {
+  await db.transaction('rw', [db.binders, db.notes, db.sessions, db.strokes], async () => {
     await db.binders.delete(binderId);
+    const noteIds = (await db.notes.where('binderId').equals(binderId).primaryKeys()) as string[];
+    await db.strokes.where('noteId').anyOf(noteIds).delete();
     await db.notes.where('binderId').equals(binderId).delete();
     await db.sessions.where('binderId').equals(binderId).delete();
   });
@@ -173,4 +197,26 @@ export async function addStudyTime(binderId: string, seconds: number, startedAt:
   const existing = await db.sessions.get(id);
   if (existing) await db.sessions.update(id, { seconds: existing.seconds + seconds });
   else await db.sessions.add({ id, binderId, date, seconds, startedAt });
+}
+
+export async function deleteNote(noteId: string) {
+  await db.transaction('rw', db.notes, db.strokes, async () => {
+    await db.notes.delete(noteId);
+    await db.strokes.where('noteId').equals(noteId).delete();
+  });
+}
+
+export async function duplicateNote(note: Note): Promise<Note> {
+  const copy = await addNote(note.binderId, {
+    title: `${note.title}（コピー）`,
+    kind: note.kind,
+    paper: note.paper,
+    content: note.content,
+    text: note.text,
+    bookId: note.bookId,
+    page: note.page,
+  });
+  const strokes = await db.strokes.where('noteId').equals(note.id).toArray();
+  if (strokes.length) await db.strokes.bulkAdd(strokes.map((s) => ({ ...s, id: uid(), noteId: copy.id })));
+  return copy;
 }
