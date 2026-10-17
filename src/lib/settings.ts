@@ -9,8 +9,6 @@ export interface Settings {
   syncNotePage: boolean;
   /** 新しいノートの用紙 */
   defaultPaper: 'plain' | 'lined' | 'grid' | 'dots';
-  /** 手書きノートで指でも線を書く（Apple Pencil がない場合用） */
-  fingerDraw: boolean;
   /** 暗記シートで隠すもの */
   hideRed: boolean;
   hideMarkers: MarkerName[];
@@ -19,7 +17,7 @@ export interface Settings {
 export type MarkerName = 'yellow' | 'pink' | 'green' | 'blue' | 'orange';
 
 const KEY = 'study-sakura:settings';
-const defaults: Settings = { theme: 'system', pomodoroWork: 25, pomodoroBreak: 5, noteFontSize: 16, syncNotePage: true, defaultPaper: 'lined', fingerDraw: false, hideRed: true, hideMarkers: ['yellow', 'green'] };
+const defaults: Settings = { theme: 'system', pomodoroWork: 25, pomodoroBreak: 5, noteFontSize: 16, syncNotePage: true, defaultPaper: 'lined', hideRed: true, hideMarkers: ['yellow', 'green'] };
 
 let state: Settings = (() => {
   try {
