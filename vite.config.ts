@@ -31,8 +31,8 @@ export default defineConfig({
         ],
       },
       workbox: {
-        // 日本語 PDF 用の CMap・標準フォントも含めて、オフラインで動くようにすべて保存する
-        globPatterns: ['**/*.{js,mjs,css,html,svg,png,woff2,bcmap,pfb,ttf}'],
+        // 日本語 PDF 用の CMap・標準フォント、ペットと部屋の画像も含めて、オフラインで動くようにすべて保存する
+        globPatterns: ['**/*.{js,mjs,css,html,svg,png,webp,woff2,bcmap,pfb,ttf}'],
         maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
         navigateFallback: `${base}index.html`,
         cleanupOutdatedCaches: true,

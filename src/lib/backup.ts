@@ -29,7 +29,7 @@ export function downloadBlob(blob: Blob, fileName: string) {
 
 /** すべてのデータ（参考書 PDF を含む）を 1 つのファイルに書き出す */
 export async function exportBackup() {
-  const [books, binders, notes, bookmarks, sessions, strokes, inkItems, reviews] = await Promise.all([
+  const [books, binders, notes, bookmarks, sessions, strokes, inkItems, reviews, pets, petWorld] = await Promise.all([
     db.books.toArray(),
     db.binders.toArray(),
     db.notes.toArray(),
@@ -38,11 +38,13 @@ export async function exportBackup() {
     db.strokes.toArray(),
     db.inkItems.toArray(),
     db.reviews.toArray(),
+    db.pets.toArray(),
+    db.petWorld.toArray(),
   ]);
   const encodedBooks = await Promise.all(
     books.map(async ({ file, ...rest }) => ({ ...rest, fileType: file.type || 'application/pdf', data: await blobToBase64(file) })),
   );
-  const payload = { format: FORMAT, version: 1, exportedAt: new Date().toISOString(), books: encodedBooks, binders, notes, bookmarks, sessions, strokes, inkItems, reviews };
+  const payload = { format: FORMAT, version: 1, exportedAt: new Date().toISOString(), books: encodedBooks, binders, notes, bookmarks, sessions, strokes, inkItems, reviews, pets, petWorld };
   const d = new Date();
   const stamp = `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`;
   downloadBlob(new Blob([JSON.stringify(payload)], { type: 'application/json' }), `my-study-${stamp}.json`);
@@ -56,7 +58,7 @@ export async function importBackup(file: File) {
     ...rest,
     file: base64ToBlob(data, fileType),
   }));
-  await db.transaction('rw', [db.books, db.binders, db.notes, db.bookmarks, db.sessions, db.strokes, db.inkItems, db.reviews], async () => {
+  await db.transaction('rw', [db.books, db.binders, db.notes, db.bookmarks, db.sessions, db.strokes, db.inkItems, db.reviews, db.pets, db.petWorld], async () => {
     await db.books.bulkPut(books);
     await db.binders.bulkPut(payload.binders ?? []);
     await db.notes.bulkPut(payload.notes ?? []);
@@ -65,6 +67,8 @@ export async function importBackup(file: File) {
     await db.strokes.bulkPut(payload.strokes ?? []);
     await db.inkItems.bulkPut(payload.inkItems ?? []);
     await db.reviews.bulkPut(payload.reviews ?? []);
+    await db.pets.bulkPut(payload.pets ?? []);
+    await db.petWorld.bulkPut(payload.petWorld ?? []);
   });
   return { books: books.length, binders: payload.binders?.length ?? 0, notes: payload.notes?.length ?? 0 };
 }

@@ -2,16 +2,18 @@ import { useEffect, useState } from 'react';
 import { DialogHost, ToastHost } from './components/Modal';
 import UpdatePrompt from './components/UpdatePrompt';
 import { applyTheme, useSettings } from './lib/settings';
+import PetRoom from './pets/PetRoom';
 import DeskView from './views/DeskView';
 import StudyView from './views/StudyView';
 
-type Route = { kind: 'desk' } | { kind: 'study'; binderId: string };
+type Route = { kind: 'desk' } | { kind: 'study'; binderId: string } | { kind: 'pets'; binderId?: string };
 const ROUTE_KEY = 'study-sakura:route';
 
 function loadRoute(): Route {
   try {
     const r = JSON.parse(sessionStorage.getItem(ROUTE_KEY) ?? 'null');
     if (r?.kind === 'study' && typeof r.binderId === 'string') return r;
+    if (r?.kind === 'pets') return r;
   } catch {
     /* noop */
   }
@@ -42,9 +44,17 @@ export default function App() {
   return (
     <>
       {route.kind === 'desk' ? (
-        <DeskView onOpenBinder={(binderId) => setRoute({ kind: 'study', binderId })} />
+        <DeskView onOpenBinder={(binderId) => setRoute({ kind: 'study', binderId })} onOpenPets={() => setRoute({ kind: 'pets' })} />
+      ) : route.kind === 'pets' ? (
+        // 部屋から戻ると、開いていたバインダー（無ければ本棚）に戻る
+        <PetRoom onBack={() => setRoute(route.binderId ? { kind: 'study', binderId: route.binderId } : { kind: 'desk' })} />
       ) : (
-        <StudyView key={route.binderId} binderId={route.binderId} onBack={() => setRoute({ kind: 'desk' })} />
+        <StudyView
+          key={route.binderId}
+          binderId={route.binderId}
+          onBack={() => setRoute({ kind: 'desk' })}
+          onOpenPets={() => setRoute({ kind: 'pets', binderId: route.binderId })}
+        />
       )}
       <DialogHost />
       <ToastHost />
