@@ -15,6 +15,11 @@ const W = 1000;
 /** 描画を分割するタイルの高さ（論理座標）。巨大な Canvas を作らないため */
 const TILE = 1000;
 const MIN_HEIGHT = 1414;
+/** 1 枚のタイルの画素数の上限（拡大しても iPad のメモリを使いすぎないように） */
+const MAX_TILE_PX = 5_000_000;
+/** ピンチでの拡大率（用紙の幅に合わせた大きさが 1） */
+const MIN_ZOOM = 0.6;
+const MAX_ZOOM = 3;
 const ERASER_R = 10;
 /** 指で触れてから動いた距離がこれ以下なら「タップ」とみなす（px） */
 const TAP_SLOP = 8;
@@ -166,6 +171,7 @@ export default function InkEditor({ note }: { note: Note }) {
   const [loaded, setLoaded] = useState(false);
   const [height, setHeight] = useState(MIN_HEIGHT);
   const [scale, setScale] = useState(0);
+  const [zoom, setZoom] = useState(1);
   const [items, setItems] = useState<InkItem[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [memorize, setMemorize] = useState(false);
@@ -193,6 +199,10 @@ export default function InkEditor({ note }: { note: Note }) {
   prefsRef.current = prefs;
   const scaleRef = useRef(scale);
   scaleRef.current = scale;
+  const zoomRef = useRef(1);
+  const baseScale = useRef(0);
+  /** ピンチ後に、指の間にあった点を同じ場所に保つための情報 */
+  const zoomAnchor = useRef<{ lx: number; ly: number; cx: number; cy: number } | null>(null);
   const heightRef = useRef(height);
   heightRef.current = height;
   const itemsRef = useRef(items);
@@ -255,6 +265,8 @@ export default function InkEditor({ note }: { note: Note }) {
 
   /* ---------- タイルの描画 ---------- */
   const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  /** 拡大すると 1 枚のタイルが大きくなるので、画素数が上限を超えないよう解像度を下げる */
+  const tileDpr = (sc: number) => Math.min(dpr, Math.sqrt(MAX_TILE_PX / (W * sc * TILE * sc)));
 
   const paintTile = useCallback(
     (i: number, extra?: Stroke) => {
@@ -264,7 +276,8 @@ export default function InkEditor({ note }: { note: Note }) {
       const ctx = c.getContext('2d')!;
       ctx.setTransform(1, 0, 0, 1, 0, 0);
       ctx.clearRect(0, 0, c.width, c.height);
-      ctx.setTransform(dpr * sc, 0, 0, dpr * sc, 0, -i * TILE * dpr * sc);
+      const d = tileDpr(sc);
+      ctx.setTransform(d * sc, 0, 0, d * sc, 0, -i * TILE * d * sc);
       const top = i * TILE, bottom = top + TILE;
       const list = extra ? [...strokes.current, extra] : strokes.current;
       const covers: Stroke[] = [];
@@ -299,8 +312,9 @@ export default function InkEditor({ note }: { note: Note }) {
     for (let i = first; i <= last; i++) {
       if (canvases.current.has(i)) continue;
       const c = document.createElement('canvas');
-      c.width = Math.round(cssW * dpr);
-      c.height = Math.round(cssH * dpr);
+      const d = tileDpr(sc);
+      c.width = Math.round(cssW * d);
+      c.height = Math.round(cssH * d);
       c.style.cssText = `position:absolute;left:0;top:${i * cssH}px;width:${cssW}px;height:${cssH}px`;
       holder.appendChild(c);
       canvases.current.set(i, c);
@@ -319,7 +333,8 @@ export default function InkEditor({ note }: { note: Note }) {
     const el = scrollRef.current;
     if (!el) return;
     const ro = new ResizeObserver(() => {
-      const next = Math.max(0.2, (el.clientWidth - 32) / W);
+      baseScale.current = Math.max(0.2, (el.clientWidth - 32) / W);
+      const next = baseScale.current * zoomRef.current;
       const prev = scaleRef.current;
       if (Math.abs(next - prev) < 0.001) return;
       scaleRef.current = next;
@@ -330,7 +345,26 @@ export default function InkEditor({ note }: { note: Note }) {
     return () => ro.disconnect();
   }, []);
 
+  /** 拡大率を変える（ピンチ・リセット） */
+  const applyZoom = useCallback((z: number) => {
+    const nz = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, z));
+    zoomRef.current = nz;
+    setZoom(nz);
+    const next = baseScale.current * nz;
+    scaleRef.current = next;
+    setScale(next);
+  }, []);
+
   useLayoutEffect(() => {
+    // ピンチした指の位置にあった点が、同じ場所に残るようにスクロールを合わせる
+    const a = zoomAnchor.current;
+    const scroller = scrollRef.current, paper = paperRef.current;
+    if (a && scroller && paper) {
+      zoomAnchor.current = null;
+      const r = paper.getBoundingClientRect();
+      scroller.scrollLeft += r.left + a.lx * scale - a.cx;
+      scroller.scrollTop += r.top + a.ly * scale - a.cy;
+    }
     if (loaded && scale) repaintAll();
   }, [loaded, scale, height, memorize, settings.hideRed, settings.hideMarkers, repaintAll]);
 
@@ -480,7 +514,8 @@ export default function InkEditor({ note }: { note: Note }) {
       const c = canvases.current.get(t);
       if (!c) continue;
       const ctx = c.getContext('2d')!;
-      ctx.setTransform(dpr * sc, 0, 0, dpr * sc, 0, -t * TILE * dpr * sc);
+      const d = tileDpr(sc);
+      ctx.setTransform(d * sc, 0, 0, d * sc, 0, -t * TILE * d * sc);
       ctx.globalAlpha = 1;
       ctx.globalCompositeOperation = 'source-over';
       ctx.strokeStyle = s.color;
@@ -632,7 +667,11 @@ export default function InkEditor({ note }: { note: Note }) {
       }
       if (live.current) finishStroke();
       if (erasing.current) endErase();
-      paper.setPointerCapture(e.pointerId);
+      try {
+        paper.setPointerCapture(e.pointerId);
+      } catch {
+        // 掴めなくても書けるようにする
+      }
       tap.current = { pointerId: e.pointerId, cx: e.clientX, cy: e.clientY };
       const { x, y } = toLogical(e);
 
@@ -773,65 +812,135 @@ export default function InkEditor({ note }: { note: Note }) {
       if (t) onTap(e.clientX, e.clientY);
     };
 
-    /* 指の操作：iPad の標準スクロールに任せるとペンの線が途切れることがあるので、自前でスクロールする */
-    let pan: { y: number; top: number; samples: { t: number; y: number }[]; x0: number; y0: number; t0: number; moved: boolean } | null = null;
+    /* 指の操作：iPad の標準スクロールに任せるとペンの線が途切れることがあるので、自前でスクロール・ピンチする */
+    type Gesture = {
+      kind: 'pan' | 'pinch';
+      x: number; y: number; // 開始時の指（2 本なら中点）の位置
+      left: number; top: number; // 開始時のスクロール位置
+      dist: number; zoom: number; // ピンチ開始時の指の間隔と拡大率
+      ox: number; oy: number; // ピンチ開始時の用紙の左上（画面座標）
+      f: number; // ピンチ中の倍率
+      moved: boolean;
+      t0: number;
+      samples: { t: number; x: number; y: number }[];
+    };
+    let g: Gesture | null = null;
     let momentum = 0;
     const stopMomentum = () => cancelAnimationFrame(momentum);
-    const avgY = (t: TouchList) => Array.from(t).reduce((a, x) => a + x.clientY, 0) / t.length;
+    const mid = (t: TouchList) => {
+      const n = Math.min(t.length, 2);
+      let x = 0, y = 0;
+      for (let i = 0; i < n; i++) {
+        x += t[i].clientX;
+        y += t[i].clientY;
+      }
+      return { x: x / n, y: y / n };
+    };
+    const spread = (t: TouchList) => Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
     const isStylus = (e: TouchEvent) => Array.from(e.touches).some((t) => (t as Touch & { touchType?: string }).touchType === 'stylus');
+    const clearPreview = () => {
+      paper.style.transform = '';
+      paper.style.transformOrigin = '';
+    };
 
-    /** 手のひらで動いてしまった分は元に戻して、スクロールをやめる */
+    const begin = (e: TouchEvent, kind: 'pan' | 'pinch') => {
+      const m = mid(e.touches);
+      const r = paper.getBoundingClientRect();
+      g = {
+        kind, x: m.x, y: m.y, left: scroller.scrollLeft, top: scroller.scrollTop,
+        dist: kind === 'pinch' ? spread(e.touches) : 0, zoom: zoomRef.current, ox: r.left, oy: r.top, f: 1,
+        moved: false, t0: performance.now(), samples: [{ t: performance.now(), x: m.x, y: m.y }],
+      };
+    };
+
+    /** ペンが来たら指の操作は取り消す（手のひらで動いてしまった分も元に戻す） */
     function cancelPan() {
       stopMomentum();
-      if (pan?.moved) scroller!.scrollTop = pan.top;
-      pan = null;
+      if (g?.moved) {
+        scroller!.scrollLeft = g.left;
+        scroller!.scrollTop = g.top;
+      }
+      clearPreview();
+      g = null;
       blocked = true;
     }
-    // 手のひらは接触面が大きい
-    const hasPalm = (t: TouchList) => Array.from(t).some((x) => (x.radiusX || 0) > 24 || (x.radiusY || 0) > 24);
 
     const onTouchStart = (e: TouchEvent) => {
       e.preventDefault(); // スクリブル（手書き文字の自動変換）や長押しメニューも防ぐ
       stopMomentum();
-      if (isStylus(e) || claimedByPointer || penDown || performance.now() - lastPen < 600 || hasPalm(e.touches)) {
+      // ペンで書いている間・書いた直後は、指（＝ペンを持つ手の手のひら）では何もしない
+      if (isStylus(e) || claimedByPointer || penDown || performance.now() - lastPen < 500) {
         cancelPan();
         return;
       }
       if (blocked) return;
-      const need = fingerDraw.current ? 2 : 1;
-      if (e.touches.length === 2 && fingerDraw.current && live.current) {
-        // 2 本目の指が来たら、書きかけの線はやめてスクロールに切り替える
-        live.current = null;
-        scheduleDirty();
+      const n = e.touches.length;
+      if (n === 2) {
+        if (live.current && fingerDraw.current) {
+          // 2 本目の指が来たら、指で書きかけた線はやめてピンチ・スクロールに切り替える
+          live.current = null;
+          scheduleDirty();
+        }
+        begin(e, 'pinch');
+      } else if (n === 1 && !fingerDraw.current) begin(e, 'pan');
+      else if (n > 2) {
+        clearPreview();
+        g = null;
       }
-      if (e.touches.length !== need) {
-        if (e.touches.length > need) pan = null;
-        return;
-      }
-      const y = avgY(e.touches);
-      pan = { y, top: scroller.scrollTop, samples: [{ t: performance.now(), y }], x0: e.touches[0].clientX, y0: e.touches[0].clientY, t0: performance.now(), moved: false };
     };
+
     const onTouchMove = (e: TouchEvent) => {
       e.preventDefault();
-      if (!pan || blocked) return;
-      if (isStylus(e) || penDown || hasPalm(e.touches)) {
+      if (!g || blocked) return;
+      if (isStylus(e) || penDown) {
         cancelPan();
         return;
       }
-      const y = avgY(e.touches);
-      if (Math.hypot(e.touches[0].clientX - pan.x0, e.touches[0].clientY - pan.y0) > TAP_SLOP) pan.moved = true;
+      const m = mid(e.touches);
+      if (Math.hypot(m.x - g.x, m.y - g.y) > TAP_SLOP) g.moved = true;
+      if (g.kind === 'pinch' && e.touches.length >= 2) {
+        const z = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, (g.zoom * spread(e.touches)) / g.dist));
+        g.f = z / g.zoom;
+        if (Math.abs(g.f - 1) > 0.02) g.moved = true;
+        // 指を離すまでは見た目だけ拡大（描き直しは離したときに 1 回）
+        paper.style.transformOrigin = `${g.x - g.ox}px ${g.y - g.oy}px`;
+        paper.style.transform = `translate(${m.x - g.x}px, ${m.y - g.y}px) scale(${g.f})`;
+        return;
+      }
       // 少し動くまではスクロールしない（手を置いただけで動かないように）
-      if (!pan.moved) return;
-      scroller.scrollTop = pan.top - (y - pan.y);
+      if (!g.moved) return;
+      scroller.scrollLeft = g.left - (m.x - g.x);
+      scroller.scrollTop = g.top - (m.y - g.y);
       const now = performance.now();
-      pan.samples.push({ t: now, y });
-      while (pan.samples.length > 2 && now - pan.samples[0].t > 100) pan.samples.shift();
+      g.samples.push({ t: now, x: m.x, y: m.y });
+      while (g.samples.length > 2 && now - g.samples[0].t > 100) g.samples.shift();
     };
+
     const onTouchEnd = (e: TouchEvent) => {
       if (e.touches.length === 0) blocked = false;
-      const p = pan;
-      if (!p || e.touches.length > 0) return;
-      pan = null;
+      const p = g;
+      if (!p) return;
+      if (p.kind === 'pinch') {
+        if (e.touches.length >= 2) return;
+        g = null;
+        const ch = e.changedTouches[0];
+        const endMid = e.touches.length === 1 ? { x: (e.touches[0].clientX + ch.clientX) / 2, y: (e.touches[0].clientY + ch.clientY) / 2 } : { x: p.x, y: p.y };
+        clearPreview();
+        if (!p.moved) return;
+        // 指の間にあった用紙上の点
+        const sc0 = scaleRef.current;
+        zoomAnchor.current = { lx: (p.x - p.ox) / sc0, ly: (p.y - p.oy) / sc0, cx: endMid.x, cy: endMid.y };
+        if (Math.abs(p.f - 1) > 0.01) applyZoom(p.zoom * p.f);
+        else {
+          // 拡大率は変わらず 2 本指で動かしただけ
+          scroller.scrollLeft -= endMid.x - p.x;
+          scroller.scrollTop -= endMid.y - p.y;
+          zoomAnchor.current = null;
+        }
+        return;
+      }
+      if (e.touches.length > 0) return;
+      g = null;
       const ch = e.changedTouches[0];
       if (!p.moved && performance.now() - p.t0 < 500 && !fingerDraw.current) {
         onTap(ch.clientX, ch.clientY);
@@ -839,16 +948,21 @@ export default function InkEditor({ note }: { note: Note }) {
       }
       // 指を離したあとも少し滑らせる（慣性スクロール）
       const a = p.samples[0], b = p.samples[p.samples.length - 1];
-      let v = b.t > a.t ? (b.y - a.y) / (b.t - a.t) : 0;
+      const dt0 = b.t - a.t;
+      let vx = dt0 > 0 ? (b.x - a.x) / dt0 : 0;
+      let vy = dt0 > 0 ? (b.y - a.y) / dt0 : 0;
       let last = performance.now();
       const step = (now: number) => {
         const dt = now - last;
         last = now;
-        scroller.scrollTop -= v * dt;
-        v *= Math.pow(0.95, dt / 16);
-        if (Math.abs(v) > 0.02) momentum = requestAnimationFrame(step);
+        scroller.scrollLeft -= vx * dt;
+        scroller.scrollTop -= vy * dt;
+        const k = Math.pow(0.95, dt / 16);
+        vx *= k;
+        vy *= k;
+        if (Math.hypot(vx, vy) > 0.02) momentum = requestAnimationFrame(step);
       };
-      if (Math.abs(v) > 0.1) momentum = requestAnimationFrame(step);
+      if (Math.hypot(vx, vy) > 0.1) momentum = requestAnimationFrame(step);
     };
 
     paper.addEventListener('pointerdown', onDown);
@@ -1049,7 +1163,14 @@ export default function InkEditor({ note }: { note: Note }) {
         </div>
       </div>
       <div className="note-status">
-        <span>{settings.fingerDraw ? '指でも書けます（2本指でスクロール）' : 'Apple Pencil で書く・指でスクロール'}</span>
+        <span>
+          {settings.fingerDraw ? '指でも書けます（2本指でスクロール・ピンチ）' : 'Pencil で書く・指でスクロール・2本指で拡大縮小'}
+          {Math.abs(zoom - 1) > 0.01 && (
+            <button className="zoom-reset" onClick={() => applyZoom(1)} title="用紙の幅に戻す">
+              🔍 {Math.round(zoom * 100)}%（戻す）
+            </button>
+          )}
+        </span>
         <span className={status === 'error' ? 'status-error' : ''}>
           {{ saved: `保存済み・${formatDate(note.updatedAt)}`, saving: '保存中…', error: '⚠ 保存に失敗しました' }[status]}
         </span>
