@@ -605,8 +605,14 @@ export default function InkEditor({ note }: { note: Note }) {
     const scroller = scrollRef.current;
     if (!paper || !scroller) return;
 
-    const drawsWith = (e: PointerEvent) => e.pointerType === 'pen' || e.pointerType === 'mouse' || (e.pointerType === 'touch' && fingerDraw.current);
+    // Apple Pencil を使ったら、指（手のひら）では書かない
+    const drawsWith = (e: PointerEvent) => e.pointerType === 'pen' || e.pointerType === 'mouse' || (e.pointerType === 'touch' && fingerDraw.current && !penSeen);
     let claimedByPointer = false;
+    /* 手のひらを置いて書いたときの誤動作を防ぐための状態 */
+    let penDown = false;
+    let penSeen = false;
+    let lastPen = 0;
+    let blocked = false; // 指をすべて離すまでスクロールしない
 
     const onDown = (e: PointerEvent) => {
       const tool = prefsRef.current.tool;
@@ -618,6 +624,12 @@ export default function InkEditor({ note }: { note: Note }) {
       if (e.pointerType === 'mouse' && e.button !== 0) return;
       e.preventDefault();
       claimedByPointer = true;
+      if (e.pointerType === 'pen') {
+        penDown = true;
+        penSeen = true;
+        lastPen = performance.now();
+        cancelPan();
+      }
       if (live.current) finishStroke();
       if (erasing.current) endErase();
       paper.setPointerCapture(e.pointerId);
@@ -727,6 +739,10 @@ export default function InkEditor({ note }: { note: Note }) {
 
     const onUp = (e: PointerEvent) => {
       claimedByPointer = false;
+      if (e.pointerType === 'pen') {
+        penDown = false;
+        lastPen = performance.now();
+      }
       const t = tap.current?.pointerId === e.pointerId && e.type === 'pointerup' ? tap.current : null;
       tap.current = null;
       const d = dragging.current;
@@ -764,13 +780,24 @@ export default function InkEditor({ note }: { note: Note }) {
     const avgY = (t: TouchList) => Array.from(t).reduce((a, x) => a + x.clientY, 0) / t.length;
     const isStylus = (e: TouchEvent) => Array.from(e.touches).some((t) => (t as Touch & { touchType?: string }).touchType === 'stylus');
 
+    /** 手のひらで動いてしまった分は元に戻して、スクロールをやめる */
+    function cancelPan() {
+      stopMomentum();
+      if (pan?.moved) scroller!.scrollTop = pan.top;
+      pan = null;
+      blocked = true;
+    }
+    // 手のひらは接触面が大きい
+    const hasPalm = (t: TouchList) => Array.from(t).some((x) => (x.radiusX || 0) > 24 || (x.radiusY || 0) > 24);
+
     const onTouchStart = (e: TouchEvent) => {
       e.preventDefault(); // スクリブル（手書き文字の自動変換）や長押しメニューも防ぐ
       stopMomentum();
-      if (isStylus(e) || claimedByPointer) {
-        pan = null;
+      if (isStylus(e) || claimedByPointer || penDown || performance.now() - lastPen < 600 || hasPalm(e.touches)) {
+        cancelPan();
         return;
       }
+      if (blocked) return;
       const need = fingerDraw.current ? 2 : 1;
       if (e.touches.length === 2 && fingerDraw.current && live.current) {
         // 2 本目の指が来たら、書きかけの線はやめてスクロールに切り替える
@@ -786,15 +813,22 @@ export default function InkEditor({ note }: { note: Note }) {
     };
     const onTouchMove = (e: TouchEvent) => {
       e.preventDefault();
-      if (!pan || isStylus(e)) return;
+      if (!pan || blocked) return;
+      if (isStylus(e) || penDown || hasPalm(e.touches)) {
+        cancelPan();
+        return;
+      }
       const y = avgY(e.touches);
       if (Math.hypot(e.touches[0].clientX - pan.x0, e.touches[0].clientY - pan.y0) > TAP_SLOP) pan.moved = true;
+      // 少し動くまではスクロールしない（手を置いただけで動かないように）
+      if (!pan.moved) return;
       scroller.scrollTop = pan.top - (y - pan.y);
       const now = performance.now();
       pan.samples.push({ t: now, y });
       while (pan.samples.length > 2 && now - pan.samples[0].t > 100) pan.samples.shift();
     };
     const onTouchEnd = (e: TouchEvent) => {
+      if (e.touches.length === 0) blocked = false;
       const p = pan;
       if (!p || e.touches.length > 0) return;
       pan = null;
