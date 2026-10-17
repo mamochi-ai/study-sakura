@@ -323,8 +323,9 @@ h1, h2 { margin: 0; }
 .pane { min-width: 0; min-height: 0; display: flex; flex-grow: 0; flex-shrink: 1; overflow: hidden; }
 .divider { flex: 0 0 7px; cursor: col-resize; background: var(--border); position: relative; touch-action: none; z-index: 5; }
 /* 見た目より広い範囲で掴めるようにする */
-.divider::before { content: ''; position: absolute; top: 0; bottom: 0; left: -12px; right: -12px; }
-.study-body.vertical .divider::before { left: 0; right: 0; top: -12px; bottom: -12px; }
+/* PDF 側のスクロールのつまみに重ならないよう、ノート側にだけ広げる */
+.divider::before { content: ''; position: absolute; top: 0; bottom: 0; left: 0; right: -14px; }
+.study-body.vertical .divider::before { left: 0; right: 0; top: 0; bottom: -14px; }
 .divider.dragging, .divider:active { background: var(--accent); }
 .divider::after { content: ''; position: absolute; left: 2px; right: 2px; top: 50%; height: 36px; margin-top: -18px; border-radius: 3px; background: color-mix(in srgb, var(--muted) 60%, transparent); }
 .divider:hover { background: var(--accent-soft); }
@@ -635,6 +636,7 @@ h1, h2 { margin: 0; }
 .ink-handle { bottom: -14px; right: -14px; background: var(--surface); border: 2px solid var(--accent); cursor: nwse-resize; touch-action: none; }
 .eraser-icon { display: inline-block; width: 20px; height: 12px; border-radius: 3px; transform: rotate(-30deg); background: linear-gradient(90deg, #f2a0b0 0 55%, #5b8fd6 55%); box-shadow: inset 0 0 0 1px rgba(0,0,0,.25); }
 .flag-banner { background: var(--accent); color: #fff; font-size: 12px; padding: 4px 12px; }
+.select-banner { background: #4f86c6; }
 .memorize .ink-paper { cursor: help; }
 .ink-color { width: 24px; height: 24px; border-radius: 50%; border: 2px solid transparent; margin: 0 2px; cursor: pointer; padding: 0; box-shadow: inset 0 0 0 1px rgba(0,0,0,.15); }
 .ink-color.active { border-color: var(--surface); box-shadow: 0 0 0 2px var(--text); }
