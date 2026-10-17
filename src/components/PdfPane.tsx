@@ -120,7 +120,7 @@ export const PdfPane = forwardRef<PdfPaneHandle, Props>(function PdfPane(
     const src = await viewer.current.capture(p, rect);
     if (!src) return;
     if (insertFromPdf(bus.current, { kind: 'image', src, bookId: doc.bookId, page: p })) toast(`p.${p} の切り抜きをノートに貼りました`);
-    else toast('テキストノートを開いてから使ってください');
+    else toast('ノートを開いてください');
   };
 
   const activeBook = books.find((b) => b.id === activeBookId);
@@ -170,7 +170,7 @@ export const PdfPane = forwardRef<PdfPaneHandle, Props>(function PdfPane(
           <button
             className="btn small"
             onClick={() => {
-              if (!doc || !insertPageRef(bus.current, doc.bookId, page)) toast('テキストノートを開いてから使ってください');
+              if (!doc || !insertPageRef(bus.current, doc.bookId, page)) toast('ノートを開いてください');
             }}
             title="このページへのリンクをノートに挿入 (Ctrl+Shift+P)"
           >
@@ -242,7 +242,7 @@ export const PdfPane = forwardRef<PdfPaneHandle, Props>(function PdfPane(
           <button
             onClick={() => {
               if (insertFromPdf(bus.current, { kind: 'text', text: selection.text, bookId: doc.bookId, page: selection.page })) toast('引用をノートに追加しました');
-              else toast('テキストノートを開いてから使ってください');
+              else toast('ノートを開いてください');
               setSelection(null);
               window.getSelection()?.removeAllRanges();
             }}

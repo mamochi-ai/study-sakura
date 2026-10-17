@@ -1,13 +1,14 @@
 import { useLiveQuery } from 'dexie-react-hooks';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { BinderDialog, SettingsDialog } from '../components/Dialogs';
+import { ReviewDialog, ReviewPanel, reviewStore, scrollToReviewElement } from '../components/Review';
 import { toast } from '../components/Modal';
 import NoteEditor from '../components/NoteEditor';
 import InkEditor from '../components/InkEditor';
 import { NoteTabs } from '../components/NoteList';
 import { PdfPane, type PdfPaneHandle } from '../components/PdfPane';
 import { StudyTimer } from '../components/StudyTimer';
-import { addNote, db, type Book, type ReadingPosition } from '../db';
+import { addNote, db, type Book, type ReadingPosition, type Review } from '../db';
 import { getSettings } from '../lib/settings';
 import { insertPageRef, StudyBusContext, type StudyBus } from './studyBus';
 
@@ -49,6 +50,8 @@ export default function StudyView({ binderId, onBack }: { binderId: string; onBa
     current: () => null,
     bookTitle: () => '',
     editor: null,
+    ink: null,
+    binderId,
   });
   bus.current.openPage = (bookId, page) => pdfRef.current?.openPage(bookId, page);
   bus.current.current = () => (activeBookId && pdfRef.current ? { bookId: activeBookId, page: pdfRef.current.currentPage() } : null);
@@ -99,6 +102,30 @@ export default function StudyView({ binderId, onBack }: { binderId: string; onBa
       pdfRef.current?.openPage(n.bookId, n.page);
     }
   };
+
+  // 復習マーク
+  const reviews = useLiveQuery(() => db.reviews.where('binderId').equals(binderId).toArray(), [binderId]);
+  const [reviewPanel, setReviewPanel] = useState(false);
+  const [reviewDialog, setReviewDialog] = useState<string | null>(null);
+  useEffect(() => {
+    if (reviews) reviewStore.set(reviews);
+  }, [reviews]);
+  useEffect(() => {
+    const onOpen = (e: Event) => setReviewDialog((e as CustomEvent<string>).detail);
+    window.addEventListener('study:open-review', onOpen);
+    return () => window.removeEventListener('study:open-review', onOpen);
+  }, []);
+  const jumpToReview = (r: Review) => {
+    setReviewPanel(false); // 移動先が見えるように一覧は閉じる
+    if (layout === 'pdf') setLayout('split');
+    if (r.noteId !== activeNote?.id) {
+      db.binders.update(binderId, { lastNoteId: r.noteId });
+      clearTimeout(posTimer.current);
+    }
+    if (r.bookId && r.page && binder?.bookIds.includes(r.bookId)) pdfRef.current?.openPage(r.bookId, r.page);
+    scrollToReviewElement(r.id);
+  };
+  const openReviewCount = reviews?.filter((r) => r.status !== 'done').length ?? 0;
 
   // 分割バーのドラッグ
   const startDrag = (e: React.PointerEvent) => {
@@ -163,6 +190,10 @@ export default function StudyView({ binderId, onBack }: { binderId: string; onBa
             <button className={layout === 'note' ? 'active' : ''} onClick={() => setLayout('note')} title="ノートだけ (Alt+3)">📝</button>
           </div>
           <div className="tb-spacer" />
+          <button className={`btn small review-btn${reviewPanel ? ' active' : ''}`} onClick={() => setReviewPanel(!reviewPanel)} title="復習一覧">
+            🚩<span className="tb-text"> 復習</span>
+            {openReviewCount > 0 && <span className="badge">{openReviewCount}</span>}
+          </button>
           <StudyTimer binderId={binderId} />
           <button className="icon-btn" onClick={() => setSettingsOpen(true)} title="設定">⚙</button>
         </header>
@@ -204,6 +235,8 @@ export default function StudyView({ binderId, onBack }: { binderId: string; onBa
           </section>
         </div>
 
+        {reviewPanel && <ReviewPanel binderId={binderId} onClose={() => setReviewPanel(false)} onJump={jumpToReview} />}
+        {reviewDialog && <ReviewDialog id={reviewDialog} onClose={() => setReviewDialog(null)} onJump={jumpToReview} />}
         {editBinder && <BinderDialog binder={binder} onClose={() => setEditBinder(false)} />}
         {settingsOpen && <SettingsDialog onClose={() => setSettingsOpen(false)} />}
       </div>

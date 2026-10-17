@@ -19,6 +19,8 @@ import Underline from '@tiptap/extension-underline';
 import StarterKit from '@tiptap/starter-kit';
 import katex from 'katex';
 import { askText } from '../components/Modal';
+import { openReview, reviewStore } from '../components/Review';
+import { REVIEW_STATUS } from '../db';
 import { SlashCommand } from './slash';
 
 /* ---------- 参考書ページへのリンク（クリックで PDF がそのページへ） ---------- */
@@ -27,6 +29,7 @@ declare module '@tiptap/core' {
   interface Commands<ReturnType> {
     pageRef: { insertPageRef: (attrs: { bookId: string; page: number; label?: string }) => ReturnType };
     math: { insertMath: (latex: string, display?: boolean) => ReturnType };
+    reviewMark: { insertReviewMark: (reviewId: string) => ReturnType };
   }
 }
 
@@ -70,6 +73,52 @@ export const PageRef = Node.create({
         (attrs) =>
         ({ chain }) =>
           chain().insertContent([{ type: this.name, attrs }, { type: 'text', text: ' ' }]).run(),
+    };
+  },
+});
+
+/* ---------- 復習マーク（🚩。色は状態に合わせて変わる） ---------- */
+
+export const ReviewMark = Node.create({
+  name: 'reviewMark',
+  group: 'inline',
+  inline: true,
+  atom: true,
+  selectable: true,
+  addAttributes() {
+    return { reviewId: { default: null, parseHTML: (el) => el.getAttribute('data-review-id') } };
+  },
+  parseHTML() {
+    return [{ tag: 'span[data-review-id]' }];
+  },
+  renderHTML({ node, HTMLAttributes }) {
+    return ['span', mergeAttributes(HTMLAttributes, { 'data-review-id': node.attrs.reviewId, class: 'review-mark' }), '🚩'];
+  },
+  renderText: () => '🚩',
+  addNodeView() {
+    return ({ node }) => {
+      const dom = document.createElement('span');
+      dom.className = 'review-mark';
+      dom.contentEditable = 'false';
+      dom.dataset.reviewId = node.attrs.reviewId;
+      dom.textContent = '🚩';
+      const paint = () => {
+        const st = reviewStore.get(node.attrs.reviewId);
+        dom.style.setProperty('--status-color', st ? REVIEW_STATUS[st].color : '#999');
+        dom.title = st ? `復習マーク：${REVIEW_STATUS[st].label}（タップで詳細）` : '復習マーク';
+      };
+      paint();
+      const unsub = reviewStore.subscribe(paint);
+      dom.addEventListener('click', () => openReview(node.attrs.reviewId));
+      return { dom, destroy: unsub };
+    };
+  },
+  addCommands() {
+    return {
+      insertReviewMark:
+        (reviewId) =>
+        ({ chain }) =>
+          chain().insertContent([{ type: this.name, attrs: { reviewId } }, { type: 'text', text: ' ' }]).run(),
     };
   },
 });
@@ -198,6 +247,7 @@ export function buildExtensions() {
     }),
     CharacterCount,
     PageRef,
+    ReviewMark,
     MathInline,
     MathBlock,
     SlashCommand,

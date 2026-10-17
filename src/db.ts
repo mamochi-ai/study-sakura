@@ -70,6 +70,49 @@ export interface Stroke {
   createdAt: number;
 }
 
+/** 手書きノートに置く画像・引用・ページリンク・復習マーク（論理座標） */
+export interface InkItem {
+  id: string;
+  noteId: string;
+  kind: 'image' | 'quote' | 'pageRef' | 'mark';
+  x: number;
+  y: number;
+  /** 画像・引用の幅（論理座標） */
+  w?: number;
+  /** 画像の高さ（論理座標） */
+  h?: number;
+  src?: string;
+  text?: string;
+  bookId?: string;
+  page?: number;
+  label?: string;
+  reviewId?: string;
+  createdAt: number;
+}
+
+export type ReviewStatus = 'todo' | 'doing' | 'done';
+export const REVIEW_STATUS: Record<ReviewStatus, { label: string; color: string }> = {
+  todo: { label: '未理解', color: '#e05252' },
+  doing: { label: '復習中', color: '#f0a020' },
+  done: { label: '理解済み', color: '#3fa565' },
+};
+
+/** 復習マーク */
+export interface Review {
+  id: string;
+  binderId: string;
+  noteId: string;
+  /** マークを付けたときに開いていた参考書とページ */
+  bookId?: string;
+  page?: number;
+  /** 手書きノート内の位置（論理座標） */
+  y?: number;
+  memo: string;
+  status: ReviewStatus;
+  createdAt: number;
+  updatedAt: number;
+}
+
 /** 参考書のしおり */
 export interface Bookmark {
   id: string;
@@ -95,6 +138,8 @@ class StudyDB extends Dexie {
   bookmarks!: Table<Bookmark, string>;
   sessions!: Table<StudySession, string>;
   strokes!: Table<Stroke, string>;
+  inkItems!: Table<InkItem, string>;
+  reviews!: Table<Review, string>;
 
   constructor() {
     // 保存データの名前は変えない（変えると既存のノートが読めなくなる）
@@ -107,6 +152,7 @@ class StudyDB extends Dexie {
       sessions: 'id, binderId, date',
     });
     this.version(2).stores({ strokes: 'id, noteId' });
+    this.version(3).stores({ inkItems: 'id, noteId', reviews: 'id, binderId, noteId, status' });
   }
 }
 
@@ -171,10 +217,12 @@ export async function createBinder(title: string, color: string, bookIds: string
 }
 
 export async function deleteBinder(binderId: string) {
-  await db.transaction('rw', [db.binders, db.notes, db.sessions, db.strokes], async () => {
+  await db.transaction('rw', [db.binders, db.notes, db.sessions, db.strokes, db.inkItems, db.reviews], async () => {
     await db.binders.delete(binderId);
     const noteIds = (await db.notes.where('binderId').equals(binderId).primaryKeys()) as string[];
     await db.strokes.where('noteId').anyOf(noteIds).delete();
+    await db.inkItems.where('noteId').anyOf(noteIds).delete();
+    await db.reviews.where('binderId').equals(binderId).delete();
     await db.notes.where('binderId').equals(binderId).delete();
     await db.sessions.where('binderId').equals(binderId).delete();
   });
@@ -201,9 +249,11 @@ export async function addStudyTime(binderId: string, seconds: number, startedAt:
 }
 
 export async function deleteNote(noteId: string) {
-  await db.transaction('rw', db.notes, db.strokes, async () => {
+  await db.transaction('rw', [db.notes, db.strokes, db.inkItems, db.reviews], async () => {
     await db.notes.delete(noteId);
     await db.strokes.where('noteId').equals(noteId).delete();
+    await db.inkItems.where('noteId').equals(noteId).delete();
+    await db.reviews.where('noteId').equals(noteId).delete();
   });
 }
 
@@ -219,5 +269,15 @@ export async function duplicateNote(note: Note): Promise<Note> {
   });
   const strokes = await db.strokes.where('noteId').equals(note.id).toArray();
   if (strokes.length) await db.strokes.bulkAdd(strokes.map((s) => ({ ...s, id: uid(), noteId: copy.id })));
+  // 復習マークは複製しない（同じマークが 2 つ並ぶと紛らわしいため）
+  const items = (await db.inkItems.where('noteId').equals(note.id).toArray()).filter((i) => i.kind !== 'mark');
+  if (items.length) await db.inkItems.bulkAdd(items.map((i) => ({ ...i, id: uid(), noteId: copy.id })));
   return copy;
+}
+
+export async function createReview(init: Omit<Review, 'id' | 'createdAt' | 'updatedAt' | 'status' | 'memo'> & { memo?: string }): Promise<Review> {
+  const now = Date.now();
+  const r: Review = { memo: '', status: 'todo', ...init, id: uid(), createdAt: now, updatedAt: now };
+  await db.reviews.add(r);
+  return r;
 }
