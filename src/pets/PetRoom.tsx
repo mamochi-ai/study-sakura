@@ -1,21 +1,13 @@
 import { useLiveQuery } from 'dexie-react-hooks';
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Modal, askText } from '../components/Modal';
 import { db, today, type Pet, type PetWorld } from '../db';
 import { formatDuration } from '../lib/format';
 import { currentFullness, foodLeft, HUNGRY_AT, MAX_PETS, nextPetSlotHours, nextUnlock, petSlots, unlockedItems } from './rules';
 import { GROUP_LABEL, SPECIES, speciesOf } from './species';
-import { ANCHOR, assetUrl, CELL, ROOM, Sprite } from './sprite';
+import Room from './Room';
+import { Sprite } from './sprite';
 import { adoptPet, ensureWorld, renamePet, setMiniPet } from './world';
-
-/** ペットが最初に立つ場所（部屋の座標、足元） */
-const SPOTS = [
-  { x: 800, y: 905 },
-  { x: 520, y: 960 },
-  { x: 1050, y: 975 },
-  { x: 330, y: 905 },
-  { x: 1300, y: 935 },
-];
 
 export default function PetRoom({ onBack }: { onBack: () => void }) {
   const [world, setWorld] = useState<PetWorld | null>(null);
@@ -54,7 +46,7 @@ export default function PetRoom({ onBack }: { onBack: () => void }) {
       </header>
 
       <div className="pet-body">
-        <RoomStage items={items} pets={pets} onTapPet={setMenuPet} />
+        <Room items={items} pets={pets} />
 
         <aside className="pet-panel">
           <div className="pet-stats">
@@ -100,58 +92,6 @@ export default function PetRoom({ onBack }: { onBack: () => void }) {
 
       {picker && <PetPicker onClose={() => setPicker(false)} />}
       {menuPet && <PetMenu pet={menuPet} isMini={w.miniPetId === menuPet.id} onClose={() => setMenuPet(null)} />}
-    </div>
-  );
-}
-
-/** 部屋（背景・家具・ペット）。座標は素材と同じ 1536×1024 で、画面に合わせて縮小する */
-function RoomStage({ items, pets, onTapPet }: { items: string[]; pets: Pet[]; onTapPet: (p: Pet) => void }) {
-  const boxRef = useRef<HTMLDivElement>(null);
-  const [scale, setScale] = useState(0);
-
-  useLayoutEffect(() => {
-    const box = boxRef.current!;
-    const fit = () => setScale(Math.min(box.clientWidth / ROOM.width, box.clientHeight / ROOM.height));
-    fit();
-    const ro = new ResizeObserver(fit);
-    ro.observe(box);
-    return () => ro.disconnect();
-  }, []);
-
-  const furniture = Object.entries(ROOM.items).filter(([key]) => items.includes(key));
-
-  return (
-    <div ref={boxRef} className="room-box">
-      <div className="room" style={{ width: ROOM.width, height: ROOM.height, transform: `scale(${scale})`, visibility: scale ? 'visible' : 'hidden' }}>
-        <img className="room-bg" src={assetUrl(`room/${ROOM.background}`)} alt="" draggable={false} />
-        {furniture.map(([key, it]) => (
-          <img
-            key={key}
-            className="room-item"
-            src={assetUrl(`room/${it.file}`)}
-            alt=""
-            draggable={false}
-            // 奥行き：床に接している位置が手前のものほど上に描く（ラグは常に床の上）
-            style={{ left: it.x, top: it.y, width: it.w, height: it.h, zIndex: key === 'rug' ? 1 : it.groundY }}
-          />
-        ))}
-        {pets.map((p, i) => {
-          const spot = SPOTS[i % SPOTS.length];
-          const size = Math.round(CELL * speciesOf(p.species).scale * 1.1);
-          const k = size / CELL;
-          return (
-            <button
-              key={p.id}
-              className="room-pet"
-              style={{ left: spot.x - ANCHOR[0] * k, top: spot.y - ANCHOR[1] * k, zIndex: spot.y }}
-              onClick={() => onTapPet(p)}
-              aria-label={p.name}
-            >
-              <Sprite species={p.species} size={size} />
-            </button>
-          );
-        })}
-      </div>
     </div>
   );
 }
