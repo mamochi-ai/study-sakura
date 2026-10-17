@@ -132,6 +132,10 @@ export default function StudyView({ binderId, onBack }: { binderId: string; onBa
     const body = bodyRef.current;
     if (!body) return;
     e.preventDefault();
+    // 指が仕切りから外れても追いかけられるようにする
+    const handle = e.currentTarget as HTMLElement;
+    handle.setPointerCapture?.(e.pointerId);
+    handle.classList.add('dragging');
     const rect = body.getBoundingClientRect();
     let last = ratio ?? binder?.splitRatio ?? 0.5;
     const move = (ev: PointerEvent) => {
@@ -142,12 +146,15 @@ export default function StudyView({ binderId, onBack }: { binderId: string; onBa
     const up = () => {
       window.removeEventListener('pointermove', move);
       window.removeEventListener('pointerup', up);
+      window.removeEventListener('pointercancel', up);
+      handle.classList.remove('dragging');
       document.body.classList.remove('resizing');
       db.binders.update(binderId, { splitRatio: last });
     };
     document.body.classList.add('resizing');
     window.addEventListener('pointermove', move);
     window.addEventListener('pointerup', up);
+    window.addEventListener('pointercancel', up);
   };
 
   // ショートカット

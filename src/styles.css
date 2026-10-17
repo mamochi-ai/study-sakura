@@ -61,7 +61,13 @@
 
 * { box-sizing: border-box; }
 html, body, #root { height: 100%; margin: 0; }
-body { background: var(--bg); overflow: hidden; overscroll-behavior: none; touch-action: manipulation; -webkit-text-size-adjust: 100%; }
+body {
+  background: var(--bg); overflow: hidden; overscroll-behavior: none; touch-action: manipulation; -webkit-text-size-adjust: 100%;
+  /* 手のひらや長押しで文字の選択が始まると、ペンや仕切りの操作が効かなくなるので、選択できるのは入力欄と本文だけにする */
+  -webkit-user-select: none; user-select: none; -webkit-touch-callout: none;
+}
+input, textarea, [contenteditable='true'], .note-content, .textLayer, .modal-body p { -webkit-user-select: text; user-select: text; }
+.textLayer { -webkit-touch-callout: default; }
 button, summary { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent; }
 body.resizing { cursor: col-resize; user-select: none; }
 body.resizing iframe, body.resizing .pdf-scroll { pointer-events: none; }
@@ -233,10 +239,11 @@ h1, h2 { margin: 0; }
 .binder-spine-wrap { position: relative; flex-shrink: 0; }
 .binder-spine { width: 54px; height: 204px; border-radius: 5px; justify-content: space-between; padding: 8px 0; gap: 6px; }
 .binder-label {
-  background: var(--paper); color: var(--text); border-radius: 3px; width: 40px; height: 120px; display: flex; justify-content: center;
+  background: var(--paper); color: var(--text); border-radius: 3px; width: 34px; height: 150px;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; overflow: hidden;
   box-shadow: inset 0 0 0 1px rgba(0,0,0,.1);
 }
-.binder-label .spine-title { text-shadow: none; font-size: 13px; letter-spacing: 0; padding: 6px 0; }
+.binder-label .spine-title { text-shadow: none; font-size: 13px; letter-spacing: 0; padding: 6px 0; flex: 0 1 auto; max-height: 100%; }
 .binder-ring { width: 14px; height: 14px; flex-shrink: 0; border-radius: 50%; background: radial-gradient(circle, #555 0 35%, #ddd 40% 60%, #999 65%); box-shadow: 0 1px 2px rgba(0,0,0,.4); }
 .spine-edit {
   position: absolute; top: -6px; right: -6px; width: 24px; height: 24px; border-radius: 50%; border: 0; cursor: pointer;
@@ -314,7 +321,11 @@ h1, h2 { margin: 0; }
 .study-body { flex: 1; display: flex; min-height: 0; }
 .study-body.vertical { flex-direction: column; }
 .pane { min-width: 0; min-height: 0; display: flex; flex-grow: 0; flex-shrink: 1; overflow: hidden; }
-.divider { flex: 0 0 7px; cursor: col-resize; background: var(--border); position: relative; touch-action: none; }
+.divider { flex: 0 0 7px; cursor: col-resize; background: var(--border); position: relative; touch-action: none; z-index: 5; }
+/* 見た目より広い範囲で掴めるようにする */
+.divider::before { content: ''; position: absolute; top: 0; bottom: 0; left: -12px; right: -12px; }
+.study-body.vertical .divider::before { left: 0; right: 0; top: -12px; bottom: -12px; }
+.divider.dragging, .divider:active { background: var(--accent); }
 .divider::after { content: ''; position: absolute; left: 2px; right: 2px; top: 50%; height: 36px; margin-top: -18px; border-radius: 3px; background: color-mix(in srgb, var(--muted) 60%, transparent); }
 .divider:hover { background: var(--accent-soft); }
 .study-body.vertical .divider { cursor: row-resize; }
