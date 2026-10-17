@@ -8,6 +8,7 @@ export const editorHooks: {
   insertCurrentPageRef?: (editor: Editor) => void;
   pickImage?: (editor: Editor) => void;
   insertMath?: (editor: Editor, display: boolean) => void;
+  addReview?: (editor: Editor) => void;
 } = {};
 
 export interface SlashItem {
@@ -32,6 +33,7 @@ export const SLASH_ITEMS: SlashItem[] = [
   { title: '数式', hint: '文中の数式（LaTeX）', icon: '∑', keywords: 'math latex suushiki sum 数式 katex', run: (e, r) => { e.chain().focus().deleteRange(r).run(); editorHooks.insertMath?.(e, false); } },
   { title: '数式ブロック', hint: '中央寄せの数式', icon: '∫', keywords: 'math block latex suushiki 数式', run: (e, r) => { e.chain().focus().deleteRange(r).run(); editorHooks.insertMath?.(e, true); } },
   { title: '画像', hint: 'ファイルから挿入', icon: '🖼', keywords: 'image picture gazou 画像', run: (e, r) => { e.chain().focus().deleteRange(r).run(); editorHooks.pickImage?.(e); } },
+  { title: '復習マーク', hint: '分からないところに 🚩 を付ける', icon: '🚩', keywords: 'review flag fukushuu 復習 マーク 旗', run: (e, r) => { e.chain().focus().deleteRange(r).run(); editorHooks.addReview?.(e); } },
   { title: '今のページを参照', hint: '参考書の表示中ページへのリンク', icon: '📖', keywords: 'page ref pdf sansyou 参照 ページ', run: (e, r) => { e.chain().focus().deleteRange(r).run(); editorHooks.insertCurrentPageRef?.(e); } },
 ];
 

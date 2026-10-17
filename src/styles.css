@@ -494,17 +494,46 @@ h1, h2 { margin: 0; }
 .math-node.ProseMirror-selectednode { outline: 2px solid var(--accent); }
 .math-block { display: block; text-align: center; padding: .4em 0; overflow-x: auto; }
 
-/* 暗記シート：赤字と緑マーカーを隠す */
-.memorize .note-content span[style*='color: #d32f2f'], .memorize .note-content span[style*='color: rgb(211, 47, 47)'],
-.memorize .note-content mark[data-color='#b9f6ca'] {
+/* 暗記シート：選んだ色の文字・マーカーを隠す（タップ / マウスを乗せると表示） */
+.memorize.hide-red .note-content span[style*='color: #d32f2f'],
+.memorize.hide-red .note-content span[style*='color: rgb(211, 47, 47)'],
+.memorize.hide-red .note-content span[style*='color: #ef6c00'],
+.memorize.hide-red .note-content span[style*='color: rgb(239, 108, 0)'],
+.memorize.hide-yellow .note-content mark[data-color='#fff176'],
+.memorize.hide-pink .note-content mark[data-color='#ffb3c8'],
+.memorize.hide-green .note-content mark[data-color='#b9f6ca'],
+.memorize.hide-blue .note-content mark[data-color='#b3e5fc'],
+.memorize.hide-orange .note-content mark[data-color='#ffcc80'] {
   color: transparent !important; background: #c62828 !important; border-radius: 3px; transition: color .1s, background .1s; cursor: help;
 }
-.memorize .note-content mark[data-color='#b9f6ca'] { background: #2e7d32 !important; }
-.memorize .note-content span[style*='color: #d32f2f']:hover, .memorize .note-content span[style*='color: rgb(211, 47, 47)']:hover,
-.memorize .note-content span[style*='color: #d32f2f']:active,
-.memorize .note-content mark[data-color='#b9f6ca']:hover, .memorize .note-content mark[data-color='#b9f6ca']:active {
+.memorize.hide-yellow .note-content mark[data-color='#fff176'] { background: #e0b400 !important; }
+.memorize.hide-pink .note-content mark[data-color='#ffb3c8'] { background: #d6457a !important; }
+.memorize.hide-green .note-content mark[data-color='#b9f6ca'] { background: #2e7d32 !important; }
+.memorize.hide-blue .note-content mark[data-color='#b3e5fc'] { background: #1e78c8 !important; }
+.memorize.hide-orange .note-content mark[data-color='#ffcc80'] { background: #e07800 !important; }
+.memorize.hide-red .note-content span[style*='color: #d32f2f']:hover,
+.memorize.hide-red .note-content span[style*='color: rgb(211, 47, 47)']:hover,
+.memorize.hide-red .note-content span[style*='color: #ef6c00']:hover,
+.memorize.hide-red .note-content span[style*='color: rgb(239, 108, 0)']:hover,
+.memorize.hide-yellow .note-content mark[data-color='#fff176']:hover,
+.memorize.hide-pink .note-content mark[data-color='#ffb3c8']:hover,
+.memorize.hide-green .note-content mark[data-color='#b9f6ca']:hover,
+.memorize.hide-blue .note-content mark[data-color='#b3e5fc']:hover,
+.memorize.hide-orange .note-content mark[data-color='#ffcc80']:hover,
+.memorize.hide-red .note-content span[style*='color: #d32f2f']:active,
+.memorize.hide-red .note-content span[style*='color: rgb(211, 47, 47)']:active,
+.memorize.hide-red .note-content span[style*='color: #ef6c00']:active,
+.memorize.hide-red .note-content span[style*='color: rgb(239, 108, 0)']:active,
+.memorize.hide-yellow .note-content mark[data-color='#fff176']:active,
+.memorize.hide-pink .note-content mark[data-color='#ffb3c8']:active,
+.memorize.hide-green .note-content mark[data-color='#b9f6ca']:active,
+.memorize.hide-blue .note-content mark[data-color='#b3e5fc']:active,
+.memorize.hide-orange .note-content mark[data-color='#ffcc80']:active {
   color: inherit !important; background: color-mix(in srgb, #c62828 15%, transparent) !important;
 }
+/* 暗記シート中も、隠す対象の中の画像や数式はそのまま */
+.memorize .note-content mark .katex { color: inherit; }
+
 
 /* 選択時のミニツールバー */
 .bubble { display: flex; align-items: center; gap: 2px; background: #2b2724; padding: 4px; border-radius: 8px; box-shadow: var(--shadow); }
@@ -557,13 +586,16 @@ h1, h2 { margin: 0; }
 
 /* ============ 手書きノート ============ */
 .ink-scroll { background: var(--surface-2); touch-action: pan-y; }
-.ink-title { display: block; max-width: none; margin: 0 16px; padding: 12px 4px 8px; width: calc(100% - 32px); }
+.ink-titlebar { padding: 10px 16px 8px; }
+.ink-title-btn { border: 0; background: transparent; font-size: 22px; font-weight: 700; padding: 2px 4px; border-radius: 6px; cursor: pointer; text-align: left; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ink-title-btn:hover { background: var(--surface); }
 .ink-paper {
   position: relative; margin: 0 16px 40px; background-color: var(--ink-paper); border-radius: 4px; box-shadow: 0 1px 6px rgba(0,0,0,.12);
   --gap: calc(var(--u) * 36);
   touch-action: pan-y; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; cursor: crosshair;
 }
-.ink-paper.finger-draw { touch-action: none; }
+.ink-paper { touch-action: none; }
+.ink-paper.tool-select, .ink-paper.tool-flag { cursor: default; }
 .ink-paper.erasing { cursor: cell; }
 .ink-paper.paper-lined { background-image: linear-gradient(to bottom, transparent calc(var(--gap) - 1px), #c8d4e6 calc(var(--gap) - 1px)); background-size: 100% var(--gap); }
 .ink-paper.paper-grid {
@@ -571,7 +603,28 @@ h1, h2 { margin: 0; }
   background-size: var(--gap) var(--gap);
 }
 .ink-paper.paper-dots { background-image: radial-gradient(circle, #b4c0d2 1.4px, transparent 1.9px); background-size: var(--gap) var(--gap); }
-.ink-tiles { position: absolute; inset: 0; pointer-events: none; }
+.ink-tiles { position: absolute; inset: 0; pointer-events: none; z-index: 2; }
+.ink-items { position: absolute; inset: 0; z-index: 1; }
+.ink-overlay { position: absolute; inset: 0; z-index: 3; pointer-events: none; }
+.ink-overlay > * { pointer-events: auto; }
+.ink-item { position: absolute; color: #2b2724; line-height: 1.5; }
+.ink-item .page-ref { font-size: max(11px, .7em); margin-top: 4px; }
+.ink-image img { display: block; border-radius: 4px; border: 1px solid #e0d8cc; background: #fff; -webkit-user-drag: none; }
+.ink-quote { border-left: 4px solid color-mix(in srgb, var(--binder-color, var(--accent)) 60%, transparent); background: rgba(255,255,255,.7); padding: .3em .7em; border-radius: 0 6px 6px 0; }
+.ink-quote p { margin: 0; white-space: pre-wrap; }
+.ink-mark {
+  position: absolute; border: 0; background: var(--surface); border-radius: 99px; padding: 3px 8px 3px 6px; font-size: 15px; line-height: 1.2;
+  box-shadow: 0 0 0 2px var(--status-color), 0 2px 6px rgba(0,0,0,.2); cursor: pointer; display: inline-flex; gap: 4px; align-items: center; max-width: 220px;
+}
+.ink-mark-memo { font-size: 12px; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ink-paper.tool-pen .ink-mark, .ink-paper.tool-marker .ink-mark, .ink-paper.tool-eraser .ink-mark { pointer-events: none; }
+.ink-selection { position: absolute; border: 2px dashed var(--accent); border-radius: 6px; min-height: 30px; pointer-events: none; }
+.ink-del, .ink-handle { pointer-events: auto; position: absolute; width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; }
+.ink-del { top: -16px; right: -16px; border: 0; background: var(--danger); color: #fff; font-size: 14px; cursor: pointer; box-shadow: var(--shadow); }
+.ink-handle { bottom: -14px; right: -14px; background: var(--surface); border: 2px solid var(--accent); cursor: nwse-resize; touch-action: none; }
+.eraser-icon { display: inline-block; width: 20px; height: 12px; border-radius: 3px; transform: rotate(-30deg); background: linear-gradient(90deg, #f2a0b0 0 55%, #5b8fd6 55%); box-shadow: inset 0 0 0 1px rgba(0,0,0,.25); }
+.flag-banner { background: var(--accent); color: #fff; font-size: 12px; padding: 4px 12px; }
+.memorize .ink-paper { cursor: help; }
 .ink-color { width: 24px; height: 24px; border-radius: 50%; border: 2px solid transparent; margin: 0 2px; cursor: pointer; padding: 0; box-shadow: inset 0 0 0 1px rgba(0,0,0,.15); }
 .ink-color.active { border-color: var(--surface); box-shadow: 0 0 0 2px var(--text); }
 .ink-width { width: 30px; height: 30px; display: inline-grid; place-items: center; border: 0; background: transparent; border-radius: 6px; cursor: pointer; }
@@ -587,6 +640,49 @@ h1, h2 { margin: 0; }
   .ink-color { width: 30px; height: 30px; }
   .ink-width { width: 38px; height: 38px; }
   .note-tab { padding: 10px 14px; font-size: 14px; }
+}
+
+/* ============ 復習マーク ============ */
+.review-mark {
+  display: inline-block; cursor: pointer; border-radius: 6px; padding: 0 .2em; margin: 0 .1em; line-height: 1.4;
+  box-shadow: inset 0 -3px 0 var(--status-color, #e05252); background: color-mix(in srgb, var(--status-color, #e05252) 15%, transparent);
+}
+.review-mark.ProseMirror-selectednode { outline: 2px solid var(--accent); }
+.flash { animation: flash 1.2s ease 2; }
+@keyframes flash { 50% { box-shadow: 0 0 0 6px color-mix(in srgb, var(--accent) 45%, transparent); } }
+.review-btn { position: relative; }
+.review-btn.active { background: var(--accent-soft); border-color: var(--accent); }
+.badge { background: #e05252; color: #fff; border-radius: 99px; font-size: 11px; padding: 0 6px; line-height: 17px; min-width: 18px; text-align: center; }
+.review-backdrop { position: fixed; inset: 0; z-index: 40; background: rgba(30, 20, 10, .15); }
+.review-panel {
+  position: fixed; z-index: 41; top: 0; right: 0; bottom: 0; width: min(380px, 92vw); background: var(--surface); box-shadow: var(--shadow);
+  display: flex; flex-direction: column; padding-top: env(safe-area-inset-top); animation: slide-left .15s ease;
+}
+@keyframes slide-left { from { transform: translateX(16px); opacity: 0; } }
+.review-head { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px 6px; }
+.review-head h2 { font-size: 17px; }
+.review-tabs { display: flex; gap: 4px; padding: 4px 10px 8px; flex-wrap: wrap; border-bottom: 1px solid var(--border); }
+.review-tabs button { border: 1px solid var(--border); background: var(--surface-2); border-radius: 99px; padding: 5px 10px; font-size: 13px; cursor: pointer; display: inline-flex; gap: 5px; align-items: center; }
+.review-tabs button.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+.review-tabs .count { font-size: 11px; opacity: .8; }
+.review-list { list-style: none; margin: 0; padding: 6px 8px 20px; overflow: auto; flex: 1; }
+.review-item { border-left: 4px solid var(--status-color); background: var(--surface-2); border-radius: 0 8px 8px 0; margin-bottom: 8px; padding: 6px 8px 8px; }
+.review-main { display: flex; flex-direction: column; gap: 3px; width: 100%; text-align: left; border: 0; background: transparent; cursor: pointer; padding: 2px 2px 6px; }
+.review-memo { font-size: 14px; font-weight: 600; }
+.review-meta { font-size: 12px; color: var(--muted); }
+.status-picker { display: inline-flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+.status-picker button { border: 0; background: var(--surface); padding: 5px 10px; font-size: 12px; cursor: pointer; color: var(--muted); }
+.status-picker button + button { border-left: 1px solid var(--border); }
+.status-picker button.active { background: var(--status-color); color: #fff; font-weight: 700; }
+.memorize-controls { display: inline-flex; align-items: center; gap: 2px; }
+.hide-menu { min-width: 240px; }
+.hide-menu .check { padding: 6px 8px; margin: 0; align-items: center; cursor: pointer; }
+.hide-sample { display: inline-block; min-width: 22px; text-align: center; border-radius: 3px; font-size: 12px; }
+.hide-sample.red { color: #d32f2f; font-weight: 700; }
+.recent-review { color: #e05252 !important; font-weight: 600; }
+@media (pointer: coarse) {
+  .status-picker button { padding: 8px 12px; font-size: 13px; }
+  .review-tabs button { padding: 7px 12px; }
 }
 
 /* ============ 新バージョンの通知 ============ */

@@ -153,6 +153,7 @@ function RecentCard({ binder, onOpen }: { binder: Binder; onOpen: () => void }) 
   const book = useLiveQuery(() => (binder.activeBookId ? db.books.get(binder.activeBookId) : undefined), [binder.activeBookId]);
   const note = useLiveQuery(() => (binder.lastNoteId ? db.notes.get(binder.lastNoteId) : undefined), [binder.lastNoteId]);
   const pos = binder.activeBookId ? binder.positions[binder.activeBookId] : undefined;
+  const openReviews = useLiveQuery(() => db.reviews.where('binderId').equals(binder.id).filter((r) => r.status !== 'done').count(), [binder.id]) ?? 0;
   return (
     <button className="recent-card" onClick={onOpen} style={{ '--binder-color': binder.color } as React.CSSProperties}>
       <div className="recent-book">{book ? <BookCover book={book} size={54} /> : <div className="book-cover placeholder" style={{ width: 54, height: 76 }} />}</div>
@@ -161,6 +162,7 @@ function RecentCard({ binder, onOpen }: { binder: Binder; onOpen: () => void }) 
         <div className="recent-meta">
           {note && <span>📝 {note.title}</span>}
           {book && <span>📖 {book.title}{pos ? ` p.${pos.page}` : ''}</span>}
+          {openReviews > 0 && <span className="recent-review">🚩 要復習 {openReviews}</span>}
         </div>
       </div>
     </button>

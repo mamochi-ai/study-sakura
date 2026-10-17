@@ -9,14 +9,11 @@ import { useSettings } from '../lib/settings';
 import { insertPageRef, useStudyBus } from '../views/studyBus';
 import { askText, toast } from './Modal';
 import { notePaper, PaperPicker } from './PaperPicker';
+import { createReview } from '../db';
+import { MARKERS as MARKER_DEFS } from '../lib/memorize';
+import { MemorizeControls } from './Memorize';
 
-const MARKERS = [
-  { color: '#fff176', name: '黄' },
-  { color: '#ffb3c8', name: 'ピンク' },
-  { color: '#b9f6ca', name: '緑' },
-  { color: '#b3e5fc', name: '青' },
-  { color: '#ffcc80', name: 'オレンジ' },
-];
+const MARKERS = MARKER_DEFS.map((m) => ({ color: m.text, name: m.label }));
 const PENS = [
   { color: '', name: '黒（標準）' },
   { color: '#d32f2f', name: '赤' },
@@ -123,6 +120,14 @@ export default function NoteEditor({ note, onSaved }: { note: Note; onSaved?: ()
       const cur = bus.current.current();
       if (!cur || !insertPageRef(bus.current, cur.bookId, cur.page)) toast('参考書を開いてください');
     };
+    editorHooks.addReview = async (ed) => {
+      const memo = await askText({ title: '🚩 復習マーク', label: 'メモ（任意）：何が分からないか など', value: '' });
+      if (memo === null) return;
+      const cur = bus.current.current();
+      const review = await createReview({ binderId: bus.current.binderId, noteId: note.id, bookId: cur?.bookId, page: cur?.page, memo: memo.trim() });
+      ed.chain().focus().insertReviewMark(review.id).run();
+      toast('復習マークを付けました（上の 🚩 一覧から確認できます）');
+    };
     editorHooks.insertMath = async (ed, display) => {
       const latex = await editMathLatex('', display);
       if (latex) ed.chain().focus().insertMath(latex, display).run();
@@ -131,6 +136,24 @@ export default function NoteEditor({ note, onSaved }: { note: Note; onSaved?: ()
       if (bus.current.editor === editor) bus.current.editor = null;
     };
   }, [editor, bus]);
+
+  // 復習一覧から削除された復習マークを本文からも取り除く
+  useEffect(() => {
+    if (!editor) return;
+    const onDeleted = (e: Event) => {
+      const id = (e as CustomEvent<string>).detail;
+      const ranges: number[] = [];
+      editor.state.doc.descendants((n, pos) => {
+        if (n.type.name === 'reviewMark' && n.attrs.reviewId === id) ranges.push(pos);
+      });
+      if (!ranges.length) return;
+      const tr = editor.state.tr;
+      for (const pos of ranges.reverse()) tr.delete(pos, pos + 1);
+      editor.view.dispatch(tr);
+    };
+    window.addEventListener('study:review-deleted', onDeleted);
+    return () => window.removeEventListener('study:review-deleted', onDeleted);
+  }, [editor]);
 
   // 外から title が変わったとき（ノート一覧で名前変更）に追従
   useEffect(() => {
@@ -149,7 +172,7 @@ mark{padding:0 2px}.page-ref{background:#eef3ff;border-radius:4px;padding:0 4px;
   };
 
   return (
-    <div className={`note-editor${memorize ? ' memorize' : ''}`} style={{ '--note-font-size': `${settings.noteFontSize}px` } as React.CSSProperties}>
+    <div className={`note-editor${memorize ? ' memorize' : ''}${settings.hideRed ? ' hide-red' : ''}${settings.hideMarkers.map((m) => ` hide-${m}`).join('')}`} style={{ '--note-font-size': `${settings.noteFontSize}px` } as React.CSSProperties}>
       {editor && (
         <Toolbar
           editor={editor}
@@ -163,7 +186,7 @@ mark{padding:0 2px}.page-ref{background:#eef3ff;border-radius:4px;padding:0 4px;
           }}
         />
       )}
-      {memorize && <div className="memorize-banner">暗記シート中：赤字と緑マーカーが隠れています。マウスを乗せる（タップする）と見えます。</div>}
+      {memorize && <div className="memorize-banner">暗記シート中：選んだ色の文字やマーカーが隠れています。タップ（マウスを乗せる）と見えます。</div>}
       <div className="note-scroll">
         <div className={`note-paper paper-${notePaper(note)}`}>
           <input
@@ -344,14 +367,9 @@ function Toolbar({
           </details>
         </>
       )}
+      <button className="icon-btn" onClick={() => editorHooks.addReview?.(editor)} title="復習マークを付ける（分からないところに 🚩）">🚩</button>
       <span className="tb-spacer" />
-      <button
-        className={`btn small memorize-btn${memorize ? ' active' : ''}`}
-        onClick={onMemorize}
-        title="赤字・緑マーカーを隠して暗記チェック（赤シート）"
-      >
-        {memorize ? <>🟥<span className="tb-text"> 暗記シートを</span>外す</> : <>🟥<span className="tb-text"> 暗記シート</span></>}
-      </button>
+      <MemorizeControls active={memorize} onToggle={onMemorize} />
       {s.image && (
         <>
           <span className="tb-sep" />
