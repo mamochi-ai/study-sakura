@@ -8,6 +8,7 @@ import { formatDate } from '../lib/format';
 import { useSettings } from '../lib/settings';
 import { insertPageRef, useStudyBus } from '../views/studyBus';
 import { askText, toast } from './Modal';
+import { useMultiTapUndo } from '../lib/multiTap';
 import { notePaper, PaperPicker } from './PaperPicker';
 import { createReview } from '../db';
 import { MARKERS as MARKER_DEFS } from '../lib/memorize';
@@ -29,6 +30,7 @@ export default function NoteEditor({ note, onSaved }: { note: Note; onSaved?: ()
   const [title, setTitle] = useState(note.title);
   const [status, setStatus] = useState<'saved' | 'dirty' | 'saving'>('saved');
   const [memorize, setMemorize] = useState(false);
+  const scrollRef = useRef<HTMLDivElement>(null);
   const imageInput = useRef<HTMLInputElement>(null);
   const saveTimer = useRef<ReturnType<typeof setTimeout>>();
   const pendingSave = useRef<(() => Promise<void>) | null>(null);
@@ -74,6 +76,17 @@ export default function NoteEditor({ note, onSaved }: { note: Note; onSaved?: ()
   });
   const editorRef = useRef<Editor | null>(null);
   editorRef.current = editor;
+
+  // 2 本指タップで元に戻す・3 本指タップでやり直す
+  useMultiTapUndo(
+    scrollRef,
+    () => {
+      if (editorRef.current?.commands.undo()) toast('↶ 元に戻しました');
+    },
+    () => {
+      if (editorRef.current?.commands.redo()) toast('↷ やり直しました');
+    },
+  );
 
   const titleRef = useRef(title);
   titleRef.current = title;
@@ -187,7 +200,7 @@ mark{padding:0 2px}.page-ref{background:#eef3ff;border-radius:4px;padding:0 4px;
         />
       )}
       {memorize && <div className="memorize-banner">暗記シート中：選んだ色の文字やマーカーが隠れています。タップ（マウスを乗せる）と見えます。</div>}
-      <div className="note-scroll">
+      <div className="note-scroll" ref={scrollRef}>
         <div className={`note-paper paper-${notePaper(note)}`}>
           <input
             className="note-title"
@@ -377,6 +390,7 @@ function Toolbar({
           {['25%', '50%', '75%', '100%'].map((w) => (
             <button key={w} className="btn small" onClick={() => c().updateAttributes('image', { width: w }).run()}>{w}</button>
           ))}
+          <button className="btn small danger ghost" onClick={() => c().deleteSelection().run()}>🗑 削除</button>
         </>
       )}
     </div>
