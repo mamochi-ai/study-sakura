@@ -7,7 +7,7 @@ import { db, today, type Binder } from '../db';
 import { exportBackup, importBackup } from '../lib/backup';
 import { formatDuration } from '../lib/format';
 
-export default function DeskView({ onOpenBinder }: { onOpenBinder: (id: string) => void }) {
+export default function DeskView({ onOpenBinder, onOpenPets }: { onOpenBinder: (id: string) => void; onOpenPets: () => void }) {
   const books = useLiveQuery(() => db.books.orderBy('createdAt').toArray(), []);
   const binders = useLiveQuery(() => db.binders.orderBy('createdAt').toArray(), []);
   const [bookDialog, setBookDialog] = useState<string | null>(null);
@@ -44,6 +44,7 @@ export default function DeskView({ onOpenBinder }: { onOpenBinder: (id: string) 
           <span className="logo-mark">🌸</span> My Study
         </h1>
         <div className="desk-actions">
+          <button className="btn" onClick={onOpenPets}>🐾 ペットの部屋</button>
           <button className="btn" onClick={() => fileRef.current?.click()}>📕 参考書を追加</button>
           <button className="btn primary" onClick={() => setBinderDialog({})}>＋ 新しいバインダー</button>
           <details className="menu">

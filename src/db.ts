@@ -131,6 +131,34 @@ export interface StudySession {
   startedAt: number;
 }
 
+/** 飼っているペット 1 匹 */
+export interface Pet {
+  id: string;
+  /** 種類（src/pets/species.ts の id） */
+  species: string;
+  name: string;
+  /** 満腹度 0〜100。fullnessAt の時点の値（時間がたつと減る） */
+  fullness: number;
+  fullnessAt: number;
+  adoptedAt: number;
+  order: number;
+}
+
+/** ペットの部屋全体の状態（1 件だけ。id は 'world'） */
+export interface PetWorld {
+  id: 'world';
+  /** ペット用の累積学習時間（バインダーを削除しても減らない） */
+  studySeconds: number;
+  /** これまでに使った餌の数（所持数 = 学習時間から得た数 − 使った数） */
+  foodSpent: number;
+  /** 解放済みの家具（一度解放したら消えない） */
+  unlocked: string[];
+  /** ノート画面に出すペット */
+  miniPetId?: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
 class StudyDB extends Dexie {
   books!: Table<Book, string>;
   binders!: Table<Binder, string>;
@@ -140,6 +168,8 @@ class StudyDB extends Dexie {
   strokes!: Table<Stroke, string>;
   inkItems!: Table<InkItem, string>;
   reviews!: Table<Review, string>;
+  pets!: Table<Pet, string>;
+  petWorld!: Table<PetWorld, string>;
 
   constructor() {
     // 保存データの名前は変えない（変えると既存のノートが読めなくなる）
@@ -153,6 +183,7 @@ class StudyDB extends Dexie {
     });
     this.version(2).stores({ strokes: 'id, noteId' });
     this.version(3).stores({ inkItems: 'id, noteId', reviews: 'id, binderId, noteId, status' });
+    this.version(4).stores({ pets: 'id, order', petWorld: 'id' });
   }
 }
 
@@ -243,9 +274,14 @@ export async function addNote(binderId: string, init?: Partial<Note>): Promise<N
 export async function addStudyTime(binderId: string, seconds: number, startedAt: number) {
   const date = today(new Date(startedAt));
   const id = `${binderId}:${date}`;
-  const existing = await db.sessions.get(id);
-  if (existing) await db.sessions.update(id, { seconds: existing.seconds + seconds });
-  else await db.sessions.add({ id, binderId, date, seconds, startedAt });
+  await db.transaction('rw', db.sessions, db.petWorld, async () => {
+    const existing = await db.sessions.get(id);
+    if (existing) await db.sessions.update(id, { seconds: existing.seconds + seconds });
+    else await db.sessions.add({ id, binderId, date, seconds, startedAt });
+    // ペットの累積時間にも足す（部屋がまだ無いときは、作るときに記録から合計する）
+    const world = await db.petWorld.get('world');
+    if (world) await db.petWorld.update('world', { studySeconds: world.studySeconds + seconds, updatedAt: Date.now() });
+  });
 }
 
 export async function deleteNote(noteId: string) {

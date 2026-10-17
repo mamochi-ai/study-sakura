@@ -8,6 +8,7 @@ import InkEditor from '../components/InkEditor';
 import { NoteTabs } from '../components/NoteList';
 import { PdfPane, type PdfPaneHandle } from '../components/PdfPane';
 import { StudyTimer } from '../components/StudyTimer';
+import MiniPet from '../pets/MiniPet';
 import { addNote, db, type Book, type ReadingPosition, type Review } from '../db';
 import { getSettings } from '../lib/settings';
 import { insertPageRef, StudyBusContext, type StudyBus } from './studyBus';
@@ -25,7 +26,7 @@ function useNarrow() {
   return narrow;
 }
 
-export default function StudyView({ binderId, onBack }: { binderId: string; onBack: () => void }) {
+export default function StudyView({ binderId, onBack, onOpenPets }: { binderId: string; onBack: () => void; onOpenPets: () => void }) {
   const binder = useLiveQuery(() => db.binders.get(binderId), [binderId], null);
   const allBooks = useLiveQuery(() => db.books.toArray(), []);
   const notes = useLiveQuery(() => db.notes.where('[binderId+order]').between([binderId, -Infinity], [binderId, Infinity]).toArray(), [binderId]);
@@ -201,6 +202,7 @@ export default function StudyView({ binderId, onBack }: { binderId: string; onBa
             🚩<span className="tb-text"> 復習</span>
             {openReviewCount > 0 && <span className="badge">{openReviewCount}</span>}
           </button>
+          <MiniPet onOpen={onOpenPets} />
           <StudyTimer binderId={binderId} />
           <button className="icon-btn" onClick={() => setSettingsOpen(true)} title="設定">⚙</button>
         </header>
