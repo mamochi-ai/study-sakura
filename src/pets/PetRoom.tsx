@@ -1,13 +1,26 @@
 import { useLiveQuery } from 'dexie-react-hooks';
-import { useEffect, useState } from 'react';
-import { Modal, askText } from '../components/Modal';
+import { useEffect, useRef, useState } from 'react';
+import { Modal, askText, toast } from '../components/Modal';
 import { db, today, type Pet, type PetWorld } from '../db';
 import { formatDuration } from '../lib/format';
-import { currentFullness, foodLeft, HUNGRY_AT, MAX_PETS, nextPetSlotHours, nextUnlock, petSlots, unlockedItems } from './rules';
+import { currentFullness, FOOD_PER_10MIN, FOOD_PER_MEAL, foodLeft, HUNGRY_AT, MAX_FULLNESS, MAX_PETS, nextPetSlotHours, nextUnlock, petSlots, unlockedItems } from './rules';
 import { GROUP_LABEL, SPECIES, speciesOf } from './species';
-import Room from './Room';
+import Room, { type RoomHandle } from './Room';
 import { Sprite } from './sprite';
-import { adoptPet, ensureWorld, renamePet, setMiniPet } from './world';
+import { adoptPet, ensureWorld, feedPets, renamePet, setMiniPet } from './world';
+
+/** ごはんをあげて、食べた子を餌皿へ向かわせる */
+async function feed(ids: string[], room: RoomHandle | null) {
+  const r = await feedPets(ids);
+  if (r.ok) {
+    room?.eat(r.fed);
+    toast(`ごはんをあげました（餌 −${FOOD_PER_MEAL}）`);
+  } else if (r.reason === 'food') {
+    toast(`餌が足りません。勉強 10 分で ${FOOD_PER_10MIN} 個もらえます`);
+  } else {
+    toast(ids.length > 1 ? 'みんなお腹いっぱいです' : 'お腹いっぱいです');
+  }
+}
 
 export default function PetRoom({ onBack }: { onBack: () => void }) {
   const [world, setWorld] = useState<PetWorld | null>(null);
@@ -15,7 +28,15 @@ export default function PetRoom({ onBack }: { onBack: () => void }) {
   const pets = useLiveQuery(() => db.pets.orderBy('order').toArray(), []);
   const todaySeconds = useLiveQuery(() => db.sessions.where('date').equals(today()).toArray().then((l) => l.reduce((a, s) => a + s.seconds, 0)), []) ?? 0;
   const [picker, setPicker] = useState(false);
-  const [menuPet, setMenuPet] = useState<Pet | null>(null);
+  const [menuPetId, setMenuPetId] = useState<string | null>(null);
+  const roomRef = useRef<RoomHandle>(null);
+  const [, setTick] = useState(0);
+
+  // 満腹度は時間で減るので、開いている間も 1 分ごとに表示を更新する
+  useEffect(() => {
+    const t = setInterval(() => setTick((n) => n + 1), 60_000);
+    return () => clearInterval(t);
+  }, []);
 
   useEffect(() => {
     ensureWorld().then(setWorld);
@@ -33,6 +54,9 @@ export default function PetRoom({ onBack }: { onBack: () => void }) {
   const slots = Math.min(MAX_PETS, petSlots(w));
   const nextSlot = nextPetSlotHours(w);
   const canAdopt = pets.length < slots;
+  const food = foodLeft(w);
+  const menuPet = pets.find((p) => p.id === menuPetId);
+  const feedAll = () => feed(pets.map((p) => p.id), roomRef.current);
 
   return (
     <div className="pet-view">
@@ -46,20 +70,23 @@ export default function PetRoom({ onBack }: { onBack: () => void }) {
       </header>
 
       <div className="pet-body">
-        <Room items={items} pets={pets} />
+        <Room ref={roomRef} items={items} pets={pets} onTapBowl={feedAll} />
 
         <aside className="pet-panel">
           <div className="pet-stats">
-            <div><span>🍖 餌</span><b>{foodLeft(w)}個</b></div>
+            <div><span>🍖 餌</span><b>{food}個</b></div>
             <div><span>今日の学習</span><b>{formatDuration(todaySeconds)}</b></div>
             <div><span>累積学習</span><b>{formatDuration(w.studySeconds)}</b></div>
+            <button className="btn primary feed-all" disabled={food < FOOD_PER_MEAL || !pets.length} onClick={feedAll}>
+              🍖 みんなにごはん（餌 {FOOD_PER_MEAL}個）
+            </button>
           </div>
           <ul className="pet-cards">
             {pets.map((p) => {
               const f = currentFullness(p);
               return (
-                <li key={p.id}>
-                  <button className="pet-card" onClick={() => setMenuPet(p)}>
+                <li key={p.id} className="pet-card-row">
+                  <button className="pet-card" onClick={() => setMenuPetId(p.id)}>
                     <Sprite species={p.species} size={44} />
                     <span className="pet-card-main">
                       <span className="pet-card-name">
@@ -71,6 +98,15 @@ export default function PetRoom({ onBack }: { onBack: () => void }) {
                       </span>
                     </span>
                     <span className="pet-card-value">{f}</span>
+                  </button>
+                  <button
+                    className="btn icon pet-feed"
+                    title={`${p.name}にごはん（餌 ${FOOD_PER_MEAL}個）`}
+                    aria-label={`${p.name}にごはん`}
+                    disabled={food < FOOD_PER_MEAL || f >= MAX_FULLNESS}
+                    onClick={() => feed([p.id], roomRef.current)}
+                  >
+                    🍖
                   </button>
                 </li>
               );
@@ -91,7 +127,15 @@ export default function PetRoom({ onBack }: { onBack: () => void }) {
       </div>
 
       {picker && <PetPicker onClose={() => setPicker(false)} />}
-      {menuPet && <PetMenu pet={menuPet} isMini={w.miniPetId === menuPet.id} onClose={() => setMenuPet(null)} />}
+      {menuPet && (
+        <PetMenu
+          pet={menuPet}
+          isMini={w.miniPetId === menuPet.id}
+          canFeed={food >= FOOD_PER_MEAL}
+          onFeed={() => feed([menuPet.id], roomRef.current).then(() => setMenuPetId(null))}
+          onClose={() => setMenuPetId(null)}
+        />
+      )}
     </div>
   );
 }
@@ -142,7 +186,7 @@ function PetPicker({ onClose }: { onClose: () => void }) {
   );
 }
 
-function PetMenu({ pet, isMini, onClose }: { pet: Pet; isMini: boolean; onClose: () => void }) {
+function PetMenu({ pet, isMini, canFeed, onFeed, onClose }: { pet: Pet; isMini: boolean; canFeed: boolean; onFeed: () => void; onClose: () => void }) {
   const f = currentFullness(pet);
   const rename = async () => {
     const name = await askText({ title: '名前を変える', value: pet.name });
@@ -160,6 +204,9 @@ function PetMenu({ pet, isMini, onClose }: { pet: Pet; isMini: boolean; onClose:
         </div>
       </div>
       <div className="pet-menu-actions">
+        <button className="btn primary" disabled={!canFeed || f >= MAX_FULLNESS} onClick={onFeed}>
+          {f >= MAX_FULLNESS ? 'お腹いっぱい' : `🍖 ごはんをあげる（餌 ${FOOD_PER_MEAL}個）`}
+        </button>
         <button className="btn" onClick={rename}>✎ 名前を変える</button>
         <button className="btn" disabled={isMini} onClick={() => setMiniPet(pet.id).then(onClose)}>
           {isMini ? '📝 ノート画面に表示中' : '📝 ノート画面に出す'}

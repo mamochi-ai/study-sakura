@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { forwardRef, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { Pet } from '../db';
 import { PetActor } from './brain';
 import { NavMap, type Pt } from './nav';
@@ -28,8 +28,13 @@ function preload(species: string) {
   }
 }
 
+export interface RoomHandle {
+  /** ごはんをもらったペットを餌皿へ向かわせる */
+  eat: (ids: string[]) => void;
+}
+
 /** 部屋（背景・家具・ペット）。座標は素材と同じ 1536×1024 で、画面に合わせて縮小する */
-export default function Room({ items, pets }: { items: string[]; pets: Pet[] }) {
+const Room = forwardRef<RoomHandle, { items: string[]; pets: Pet[]; onTapBowl: () => void }>(function Room({ items, pets, onTapBowl }, ref) {
   const boxRef = useRef<HTMLDivElement>(null);
   const [scale, setScale] = useState(0);
   const actors = useRef(new Map<string, PetActor>());
@@ -106,11 +111,14 @@ export default function Room({ items, pets }: { items: string[]; pets: Pet[] }) 
     };
   }, []);
 
+  useImperativeHandle(ref, () => ({
+    eat: (ids) => {
+      const now = performance.now();
+      ids.forEach((id, i) => actors.current.get(id)?.feed(now, navRef.current, i));
+    },
+  }));
+
   const furniture = Object.entries(ROOM.items).filter(([key]) => items.includes(key));
-  const feedAll = () => {
-    const now = performance.now();
-    for (const a of actors.current.values()) a.feed(now, navRef.current);
-  };
 
   return (
     <div ref={boxRef} className="room-box">
@@ -123,7 +131,7 @@ export default function Room({ items, pets }: { items: string[]; pets: Pet[] }) 
             src={assetUrl(`room/${it.file}`)}
             alt=""
             draggable={false}
-            onClick={key === 'bowl' ? feedAll : undefined}
+            onClick={key === 'bowl' ? onTapBowl : undefined}
             // 奥行き：床に接している位置が手前のものほど上に描く（ラグは常に床の上）
             style={{ left: it.x, top: it.y, width: it.w, height: it.h, zIndex: key === 'rug' ? 1 : it.groundY }}
           />
@@ -149,4 +157,6 @@ export default function Room({ items, pets }: { items: string[]; pets: Pet[] }) 
       </div>
     </div>
   );
-}
+});
+
+export default Room;

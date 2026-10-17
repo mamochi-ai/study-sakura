@@ -38,9 +38,17 @@ function bedSpots() {
   };
 }
 
-function bowlSpot() {
+/** 餌皿のまわりで食べる場所。何匹かで食べるときは並ぶ */
+function bowlSpot(slot = 0) {
   const bowl = ROOM.items.bowl;
-  return { x: bowl.x - 50, y: bowl.groundY - 10 };
+  const spots = [
+    { x: bowl.x - 50, y: bowl.groundY - 10 },
+    { x: bowl.x + bowl.w + 50, y: bowl.groundY - 10 },
+    { x: bowl.x + bowl.w * 0.5 - 70, y: bowl.groundY + 60 },
+    { x: bowl.x + bowl.w * 0.5 + 90, y: bowl.groundY + 70 },
+    { x: bowl.x - 150, y: bowl.groundY + 40 },
+  ];
+  return spots[slot % spots.length];
 }
 
 /** 部屋の中の 1 匹。位置と状態は画面を開いている間だけ持つ（保存はしない） */
@@ -59,6 +67,8 @@ export class PetActor {
   /** 寝床から出たあとにすること */
   private after: Goal | null = null;
   private lastStare = -Infinity;
+  /** 餌皿のまわりのどこで食べるか */
+  private slot = 0;
 
   constructor(pet: Pet, pos: Pt, now: number) {
     this.pet = pet;
@@ -101,8 +111,9 @@ export class PetActor {
     if (!this.set('walk', now, Infinity)) this.path = [];
   }
 
-  /** ごはんを食べに行く（Phase C で餌の消費とつなぐ） */
-  feed(now: number, nav: NavMap) {
+  /** ごはんを食べに行く（餌の消費は world.ts の feedPets） */
+  feed(now: number, nav: NavMap, slot = 0) {
+    this.slot = slot;
     if (this.state === 'eat' || this.goal === 'eat') return;
     if (this.inBed) {
       this.after = 'eat';
@@ -110,7 +121,7 @@ export class PetActor {
       return;
     }
     if (this.state === 'surprise') return;
-    this.walkTo('eat', bowlSpot(), nav, now);
+    this.walkTo('eat', bowlSpot(slot), nav, now);
   }
 
   /** タップされたらびっくりする */
@@ -153,7 +164,7 @@ export class PetActor {
     if (this.after) {
       const g = this.after;
       this.after = null;
-      if (g === 'eat') return this.walkTo('eat', bowlSpot(), nav, now);
+      if (g === 'eat') return this.walkTo('eat', bowlSpot(this.slot), nav, now);
     }
     const hungry = currentFullness(this.pet) <= HUNGRY_AT;
     if (hungry && items.includes('bowl') && now - this.lastStare > 40_000) {

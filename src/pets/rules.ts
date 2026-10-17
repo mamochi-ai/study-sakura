@@ -20,6 +20,7 @@ export const FOOD_PER_MEAL = 3;
 export const MEAL_FULLNESS = 30;
 export const FULLNESS_DECAY = 10;
 export const FULLNESS_DECAY_MS = 6 * 60 * 60 * 1000;
+export const MAX_FULLNESS = 100;
 export const INITIAL_FULLNESS = 80;
 export const HUNGRY_AT = 30;
 

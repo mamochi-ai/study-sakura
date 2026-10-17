@@ -97,6 +97,7 @@ h1, h2 { margin: 0; }
 .btn.ghost:hover { background: color-mix(in srgb, var(--text) 7%, transparent); }
 .btn.small { padding: 4px 10px; font-size: 13px; }
 .btn.icon { padding: 7px 11px; }
+.btn:disabled { opacity: .45; cursor: default; transform: none; }
 
 .icon-btn {
   display: inline-grid; place-items: center; min-width: 30px; height: 30px; padding: 0 6px;
@@ -808,7 +809,10 @@ h1, h2 { margin: 0; }
 .pet-stats > div { display: flex; justify-content: space-between; gap: 8px; }
 .pet-stats span { color: var(--muted); }
 .pet-cards { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
-.pet-card { width: 100%; display: flex; align-items: center; gap: 10px; text-align: left; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 6px 12px 6px 6px; cursor: pointer; color: inherit; font: inherit; }
+.pet-card-row { display: flex; gap: 6px; align-items: stretch; }
+.pet-feed { flex: none; width: 44px; border-radius: 12px; font-size: 18px; }
+.feed-all { margin-top: 6px; justify-content: center; }
+.pet-card { flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px; text-align: left; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 6px 12px 6px 6px; cursor: pointer; color: inherit; font: inherit; }
 .pet-card-main { flex: 1; min-width: 0; display: grid; gap: 5px; }
 .pet-card-name { font-weight: 700; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .pet-mini-mark { margin-left: 4px; font-size: 12px; }
@@ -827,8 +831,9 @@ h1, h2 { margin: 0; }
 .pet-menu-info { display: grid; gap: 4px; font-size: 14px; }
 .pet-menu-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
 
-.mini-pet { width: 44px; height: 40px; padding: 0; border: 0; background: transparent; cursor: pointer; display: grid; place-items: center; -webkit-tap-highlight-color: transparent; }
+.mini-pet { position: relative; width: 44px; height: 40px; padding: 0; border: 0; background: transparent; cursor: pointer; display: grid; place-items: center; -webkit-tap-highlight-color: transparent; }
 .mini-pet-empty { font-size: 20px; }
+.mini-pet-hungry { position: absolute; right: -2px; top: -2px; font-size: 13px; background: var(--surface); border-radius: 99px; line-height: 1; padding: 2px; box-shadow: 0 1px 3px rgba(0,0,0,.2); }
 
 /* 縦向き・狭い画面では情報を部屋の下に */
 @media (max-width: 820px), (orientation: portrait) {
