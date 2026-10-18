@@ -7,6 +7,7 @@ import NoteEditor from '../components/NoteEditor';
 import InkEditor from '../components/InkEditor';
 import { NoteTabs } from '../components/NoteList';
 import { PdfPane, type PdfPaneHandle } from '../components/PdfPane';
+import { forgetAllPdfs } from '../lib/pdf';
 import { StudyTimer } from '../components/StudyTimer';
 import MiniPet from '../pets/MiniPet';
 import { addNote, db, type Book, type ReadingPosition, type Review } from '../db';
@@ -37,6 +38,9 @@ export default function StudyView({ binderId, onBack, onOpenPets }: { binderId: 
   const narrow = useNarrow();
   const pdfRef = useRef<PdfPaneHandle>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
+
+  // バインダーを閉じたら、読み込んだ参考書をメモリから外す
+  useEffect(() => () => forgetAllPdfs(), []);
 
   const books = useMemo(
     () => (binder && allBooks ? binder.bookIds.map((id) => allBooks.find((b) => b.id === id)).filter((b): b is Book => !!b) : []),

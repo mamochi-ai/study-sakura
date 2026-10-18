@@ -1,7 +1,10 @@
 import { useLiveQuery } from 'dexie-react-hooks';
 import { useRef, useState } from 'react';
 import { addBook, BINDER_COLORS, BOOK_COLORS, createBinder, db, deleteBinder, deleteBook, type Binder, type Book } from '../db';
+import { saveErrorText } from '../lib/errors';
+import { formatSize } from '../lib/format';
 import { forgetBookPdf } from '../lib/pdf';
+import { storageSpace, useStorageSpace } from '../lib/storage';
 import { updateSettings, useSettings } from '../lib/settings';
 import { confirmDialog, Modal, toast } from './Modal';
 import { BookCover } from './Shelf';
@@ -27,7 +30,22 @@ export function ColorPicker({ colors, value, onChange }: { colors: string[]; val
 export async function pickAndAddBooks(files: FileList | File[] | null): Promise<Book[]> {
   const pdfs = Array.from(files ?? []).filter((f) => f.type === 'application/pdf' || /\.pdf$/i.test(f.name));
   const added: Book[] = [];
-  for (const f of pdfs) added.push(await addBook(f));
+  if (!pdfs.length) return added;
+  // 空き容量を先に確かめる（ノートを保存する分も少し残す）
+  const need = pdfs.reduce((a, f) => a + f.size, 0);
+  const space = await storageSpace();
+  if (space && need + 50 * 1024 * 1024 > space.free) {
+    toast(`空き容量が足りません（追加する参考書 ${formatSize(need)}・空き ${formatSize(space.free)}）。不要な参考書を削除するか、iPad の空きを増やしてください`);
+    return added;
+  }
+  for (const f of pdfs) {
+    try {
+      added.push(await addBook(f));
+    } catch (e) {
+      toast(`「${f.name}」を追加できませんでした：${saveErrorText(e)}`);
+      break;
+    }
+  }
   if (added.length) toast(`${added.length} 冊の参考書を本棚に追加しました`);
   return added;
 }
@@ -206,6 +224,8 @@ export function BookDialog({ book, onClose, onCreateBinder }: { book: Book; onCl
 
 export function SettingsDialog({ onClose }: { onClose: () => void }) {
   const s = useSettings();
+  const space = useStorageSpace();
+  const books = useLiveQuery(() => db.books.toArray().then((l) => ({ count: l.length, size: l.reduce((a, b) => a + b.size, 0) })), []);
   return (
     <Modal title="設定" onClose={onClose} footer={<button className="btn primary" onClick={onClose}>閉じる</button>}>
       <div className="field">
@@ -236,6 +256,20 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
         <input type="checkbox" checked={s.syncNotePage} onChange={(e) => updateSettings({ syncNotePage: e.target.checked })} />
         ノートを切り替えたら、そのノートで最後に見ていた参考書のページを開く
       </label>
+      <div className="field storage-usage">
+        <span>保存しているデータ</span>
+        <div>
+          参考書 {books?.count ?? 0} 冊（{formatSize(books?.size ?? 0)}）
+          {space && (
+            <>
+              ・全体 {formatSize(space.usage)}／使える容量 {formatSize(space.quota)}
+              <div className="usage-bar">
+                <span style={{ width: `${Math.min(100, (space.usage / space.quota) * 100)}%` }} />
+              </div>
+            </>
+          )}
+        </div>
+      </div>
     </Modal>
   );
 }
