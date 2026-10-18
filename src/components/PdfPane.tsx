@@ -45,6 +45,9 @@ export const PdfPane = forwardRef<PdfPaneHandle, Props>(function PdfPane(
 
   const scale = zoom === 'fit' ? fitScale : zoom;
 
+  /** 「もう一度読み込む」で増やして、読み込みをやり直す */
+  const [reloadKey, setReloadKey] = useState(0);
+
   // 参考書を切り替えたら読み込み直す（位置はバインダーが覚えている）
   useEffect(() => {
     setDoc(null);
@@ -68,7 +71,7 @@ export const PdfPane = forwardRef<PdfPaneHandle, Props>(function PdfPane(
     };
     // position は参考書を開いた瞬間の値だけを使う
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeBookId]);
+  }, [activeBookId, reloadKey]);
 
   const report = useRef(onPositionChange);
   report.current = onPositionChange;
@@ -221,9 +224,11 @@ export const PdfPane = forwardRef<PdfPaneHandle, Props>(function PdfPane(
                 '参考書が見つかりません。本棚から削除された可能性があります'
               ) : error === BOOK_UNREADABLE ? (
                 <>
-                  {BOOK_UNREADABLE}。
+                  参考書をまだ読み込めませんでした。
                   <br />
-                  本棚の「⋯ → 📂 バックアップから復元」で同じバックアップをもう一度選ぶか、同じ PDF を本棚に追加し直してください。
+                  <button className="btn primary pdf-retry" onClick={() => setReloadKey((k) => k + 1)}>もう一度読み込む</button>
+                  <br />
+                  <small className="muted">何度やっても開けないときは、本棚の「⋯ → 📂 バックアップから復元」で同じバックアップを選ぶか、同じ PDF を本棚に追加し直してください。</small>
                 </>
               ) : (
                 <>
