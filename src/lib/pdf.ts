@@ -2,6 +2,8 @@ import * as pdfjs from 'pdfjs-dist';
 import workerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 import type { PDFDocumentProxy } from 'pdfjs-dist';
 import { db } from '../db';
+import { readBookBytes } from './bookData';
+export { BOOK_UNREADABLE } from './bookData';
 
 pdfjs.GlobalWorkerOptions.workerSrc = workerUrl;
 
@@ -10,40 +12,18 @@ export type { PDFDocumentProxy };
 
 /** 開いている参考書（最近使った順）。メモリを使いすぎないよう、同時に持つのは MAX_OPEN 冊まで */
 const cache = new Map<string, Promise<PDFDocumentProxy>>();
-/** 保存されている参考書の中身が読めなくなっているとき（以前の版で復元した参考書など） */
-export const BOOK_UNREADABLE = '参考書のデータが読めなくなっています';
 const MAX_OPEN = 2;
 
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
-
-/**
- * 保存されている参考書の中身を読む。
- * iPad では、追加した直後の PDF はまだ書き込み中で読めないことがあるので、少し待って読み直す
- */
-async function readBookData(bookId: string): Promise<{ data: Uint8Array; pageCount?: number }> {
-  for (const wait of [0, 300, 1000, 2000, 4000]) {
-    if (wait) await sleep(wait);
-    const book = await db.books.get(bookId);
-    if (!book) throw new Error('参考書が見つかりません（削除された可能性があります）');
-    try {
-      return { data: new Uint8Array(await book.file.arrayBuffer()), pageCount: book.pageCount };
-    } catch {
-      // 読み直す
-    }
-  }
-  throw new Error(BOOK_UNREADABLE);
-}
-
 async function openBook(bookId: string): Promise<PDFDocumentProxy> {
-  const book = await readBookData(bookId);
-  const data = book.data;
+  const data = new Uint8Array(await readBookBytes(bookId));
+  const book = await db.books.get(bookId);
   const doc = await pdfjs.getDocument({
     data,
     cMapUrl: `${import.meta.env.BASE_URL}pdfjs/cmaps/`,
     cMapPacked: true,
     standardFontDataUrl: `${import.meta.env.BASE_URL}pdfjs/standard_fonts/`,
   }).promise;
-  if (book.pageCount !== doc.numPages) db.books.update(bookId, { pageCount: doc.numPages });
+  if (book && book.pageCount !== doc.numPages) db.books.update(bookId, { pageCount: doc.numPages });
   return doc;
 }
 

@@ -1,52 +1,69 @@
 import { expect, test } from '@playwright/test';
-import { openDesk, SAMPLE_PDF } from './helpers';
+import { createBinder, openDesk } from './helpers';
 
-test('追加した直後で PDF がまだ読めなくても、読み直して表示する', async ({ page }) => {
+const canvas = (page: import('@playwright/test').Page) => page.locator('.pdf-page canvas').first();
+
+test('参考書を追加してすぐ開け、ペットの部屋から戻っても、本棚から開き直しても表示される', async ({ page }) => {
   await openDesk(page);
-  // iPad で、追加したばかりの PDF がまだ書き込み中で読めない状態をまねる
-  await page.evaluate(() => {
-    const w = window as unknown as { __failReads: number };
-    w.__failReads = 0;
-    const orig = Blob.prototype.arrayBuffer;
-    Blob.prototype.arrayBuffer = function () {
-      if (w.__failReads > 0 && this.type === 'application/pdf') {
-        w.__failReads--;
-        return Promise.reject(new DOMException('The object can not be found here.', 'NotFoundError'));
-      }
-      return orig.call(this);
-    };
-  });
-  await page.setInputFiles('header input[type=file][accept^="application/pdf"]', SAMPLE_PDF);
-  await page.getByRole('button', { name: '＋ 新しいバインダー' }).click();
-  await page.locator('.modal input').first().fill('読み直し');
-  await page.locator('.book-option:not(.add)').first().click();
-  await page.evaluate(() => ((window as unknown as { __failReads: number }).__failReads = 2));
-  await page.getByRole('button', { name: '作成して開く' }).click();
-  await expect(page.locator('.pdf-page canvas').first()).toBeVisible({ timeout: 20_000 });
+  await createBinder(page, '何度も開く');
+  await expect(canvas(page)).toBeVisible();
+
+  // ペットの部屋へ行って戻る
+  await page.locator('.mini-pet').click();
+  await expect(page.locator('.pet-view')).toBeVisible();
+  await page.keyboard.press('Escape');
+  await page.getByRole('button', { name: '← 戻る' }).click();
+  await expect(canvas(page)).toBeVisible({ timeout: 20_000 });
+
+  // 本棚へ戻ってから開き直す
+  await page.getByRole('button', { name: '← 本棚' }).click();
+  await page.locator('.binder-spine').first().click();
+  await expect(canvas(page)).toBeVisible({ timeout: 20_000 });
 });
 
-test('読み直しても読めないときは「もう一度読み込む」で開ける', async ({ page }) => {
+test('以前の版で保存した参考書（Blob）も開け、新しい形に移る', async ({ page }) => {
   await openDesk(page);
-  await page.evaluate(() => {
-    const w = window as unknown as { __failReads: number };
-    w.__failReads = 0;
-    const orig = Blob.prototype.arrayBuffer;
-    Blob.prototype.arrayBuffer = function () {
-      if (w.__failReads > 0 && this.type === 'application/pdf') {
-        w.__failReads--;
-        return Promise.reject(new DOMException('The object can not be found here.', 'NotFoundError'));
-      }
-      return orig.call(this);
-    };
-  });
-  await page.setInputFiles('header input[type=file][accept^="application/pdf"]', SAMPLE_PDF);
-  await page.getByRole('button', { name: '＋ 新しいバインダー' }).click();
-  await page.locator('.modal input').first().fill('もう一度');
-  await page.locator('.book-option:not(.add)').first().click();
-  await page.evaluate(() => ((window as unknown as { __failReads: number }).__failReads = 100));
-  await page.getByRole('button', { name: '作成して開く' }).click();
-  await expect(page.getByRole('button', { name: 'もう一度読み込む' })).toBeVisible({ timeout: 20_000 });
-  await page.evaluate(() => ((window as unknown as { __failReads: number }).__failReads = 0));
-  await page.getByRole('button', { name: 'もう一度読み込む' }).click();
-  await expect(page.locator('.pdf-page canvas').first()).toBeVisible({ timeout: 20_000 });
+  await createBinder(page, '以前の形式');
+  // 以前の版と同じ形にする：中身を books.file の Blob に戻し、bookData から消す
+  await page.evaluate(
+    () =>
+      new Promise<void>((resolve) => {
+        const req = indexedDB.open('study-sakura');
+        req.onsuccess = () => {
+          const db = req.result;
+          const tx = db.transaction(['books', 'bookData'], 'readwrite');
+          const data = tx.objectStore('bookData');
+          data.getAll().onsuccess = (e) => {
+            const row = (e.target as IDBRequest).result[0];
+            const books = tx.objectStore('books');
+            books.get(row.id).onsuccess = (ev) => {
+              const book = (ev.target as IDBRequest).result;
+              book.file = new Blob([row.data], { type: 'application/pdf' });
+              books.put(book);
+              data.delete(row.id);
+            };
+          };
+          tx.oncomplete = () => {
+            db.close();
+            resolve();
+          };
+        };
+      }),
+  );
+  await page.reload();
+  await expect(canvas(page)).toBeVisible({ timeout: 20_000 });
+  const moved = await page.evaluate(
+    () =>
+      new Promise<number>((resolve) => {
+        const req = indexedDB.open('study-sakura');
+        req.onsuccess = () => {
+          const q = req.result.transaction('bookData').objectStore('bookData').count();
+          q.onsuccess = () => {
+            req.result.close();
+            resolve(q.result);
+          };
+        };
+      }),
+  );
+  expect(moved).toBe(1);
 });
