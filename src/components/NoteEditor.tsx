@@ -1,4 +1,4 @@
-import { BubbleMenu, EditorContent, useEditor, useEditorState, type Editor } from '@tiptap/react';
+import { BubbleMenu, EditorContent, useEditor, useEditorState, type Editor, type JSONContent } from '@tiptap/react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { db, type Note } from '../db';
 import { editMathLatex, buildExtensions, insertImageFiles } from '../editor/extensions';
@@ -7,6 +7,7 @@ import { safeFileName, saveFile } from '../lib/save';
 import { formatDate } from '../lib/format';
 import { useSettings } from '../lib/settings';
 import { insertPageRef, useStudyBus } from '../views/studyBus';
+import { saveErrorText } from '../lib/errors';
 import { askText, toast } from './Modal';
 import { notePaper, PaperPicker } from './PaperPicker';
 import { createReview } from '../db';
@@ -27,12 +28,19 @@ export default function NoteEditor({ note, onSaved }: { note: Note; onSaved?: ()
   const bus = useStudyBus();
   const settings = useSettings();
   const [title, setTitle] = useState(note.title);
-  const [status, setStatus] = useState<'saved' | 'dirty' | 'saving'>('saved');
+  const [status, setStatus] = useState<'saved' | 'dirty' | 'saving' | 'error'>('saved');
   const [memorize, setMemorize] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const imageInput = useRef<HTMLInputElement>(null);
   const saveTimer = useRef<ReturnType<typeof setTimeout>>();
-  const pendingSave = useRef<(() => Promise<void>) | null>(null);
+  /** 最後に入力した本文の控え（エディタが閉じられたあとでも保存できるように） */
+  const latest = useRef<{ content: JSONContent; text: string } | null>(null);
+  /** 変更の通し番号と、保存が済んだ番号（保存中に入力しても「保存済み」と出さないため） */
+  const changeSeq = useRef(0);
+  const savedSeq = useRef(0);
+  const failed = useRef(false);
+  const onSavedRef = useRef(onSaved);
+  onSavedRef.current = onSaved;
 
   const extensions = useMemo(() => buildExtensions(), []);
 
@@ -71,7 +79,10 @@ export default function NoteEditor({ note, onSaved }: { note: Note; onSaved?: ()
         return false;
       },
     },
-    onUpdate: () => scheduleSave(),
+    onUpdate: ({ editor: ed }) => {
+      latest.current = { content: ed.getJSON(), text: ed.getText({ blockSeparator: '\n' }) };
+      scheduleSave();
+    },
   });
   const editorRef = useRef<Editor | null>(null);
   editorRef.current = editor;
@@ -79,36 +90,55 @@ export default function NoteEditor({ note, onSaved }: { note: Note; onSaved?: ()
   const titleRef = useRef(title);
   titleRef.current = title;
 
-  function scheduleSave() {
-    setStatus('dirty');
+  /** 保存する。失敗したら知らせて、少し待ってからやり直す */
+  const save = async () => {
     clearTimeout(saveTimer.current);
-    pendingSave.current = async () => {
-      const ed = editorRef.current;
-      pendingSave.current = null;
-      setStatus('saving');
+    const seq = changeSeq.current;
+    if (seq === savedSeq.current) return;
+    setStatus('saving');
+    try {
       await db.notes.update(note.id, {
         title: titleRef.current.trim() || '無題のノート',
-        ...(ed && !ed.isDestroyed ? { content: ed.getJSON(), text: ed.getText({ blockSeparator: '\n' }) } : {}),
+        ...(latest.current ?? {}),
         updatedAt: Date.now(),
       });
-      setStatus('saved');
-      onSaved?.();
-    };
-    saveTimer.current = setTimeout(() => pendingSave.current?.(), 600);
+      savedSeq.current = Math.max(savedSeq.current, seq);
+      failed.current = false;
+      if (savedSeq.current === changeSeq.current) {
+        setStatus('saved');
+        onSavedRef.current?.();
+      } else setStatus('dirty');
+    } catch (e) {
+      setStatus('error');
+      if (!failed.current) toast(`保存できませんでした（自動でやり直します）：${saveErrorText(e)}`);
+      failed.current = true;
+      saveTimer.current = setTimeout(() => saveRef.current(), 4000);
+    }
+  };
+  const saveRef = useRef(save);
+  saveRef.current = save;
+
+  function scheduleSave() {
+    changeSeq.current++;
+    setStatus('dirty');
+    clearTimeout(saveTimer.current);
+    saveTimer.current = setTimeout(() => saveRef.current(), 600);
   }
 
-  // ノートを閉じる・切り替えるときは即保存
+  // ノートを閉じる・切り替える・アプリが隠れるときは即保存
   useEffect(() => {
     const flush = () => {
-      clearTimeout(saveTimer.current);
-      pendingSave.current?.();
+      saveRef.current();
     };
+    const onHide = () => document.visibilityState === 'hidden' && flush();
     window.addEventListener('beforeunload', flush);
     window.addEventListener('pagehide', flush);
+    document.addEventListener('visibilitychange', onHide);
     return () => {
       flush();
       window.removeEventListener('beforeunload', flush);
       window.removeEventListener('pagehide', flush);
+      document.removeEventListener('visibilitychange', onHide);
     };
   }, []);
 
@@ -212,7 +242,9 @@ mark{padding:0 2px}.page-ref{background:#eef3ff;border-radius:4px;padding:0 4px;
       <SlashMenu />
       <div className="note-status">
         <span>{editor?.storage.characterCount.characters() ?? 0} 文字</span>
-        <span>{{ saved: `保存済み・${formatDate(note.updatedAt)}`, dirty: '編集中…', saving: '保存中…' }[status]}</span>
+        <span className={status === 'error' ? 'status-error' : ''}>
+          {{ saved: `保存済み・${formatDate(note.updatedAt)}`, dirty: '編集中…', saving: '保存中…', error: '保存できませんでした（やり直し中）' }[status]}
+        </span>
       </div>
       <input
         ref={imageInput}
