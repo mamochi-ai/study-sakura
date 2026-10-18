@@ -1,4 +1,5 @@
 import { db, type Binder, type Book, type Bookmark, type InkItem, type Note, type Pet, type PetWorld, type Review, type Stroke, type StudySession } from '../db';
+import { hasBookBytes, putBookBytes, readBookBytes } from './bookData';
 import { buildZip, readZip } from './zip';
 
 // 形式名は旧名のまま（以前のバックアップも復元できるように）
@@ -75,7 +76,14 @@ export async function createBackup(kind: BackupKind, onProgress?: (ratio: number
     petWorld,
   };
   const entries = [{ name: DATA_FILE, data: new Blob([JSON.stringify(payload)], { type: 'application/json' }) }];
-  if (kind === 'full') for (const b of books) entries.push({ name: bookPath(b.id), data: b.file });
+  if (kind === 'full')
+    for (const b of books) {
+      try {
+        entries.push({ name: bookPath(b.id), data: new Blob([await readBookBytes(b.id)], { type: 'application/pdf' }) });
+      } catch {
+        // 読めない参考書は入れない（ノートなどは書き出す）
+      }
+    }
   const zip = await buildZip(entries, onProgress);
   return new File([zip], `my-study-${kind === 'full' ? '' : 'notes-'}${stamp()}.zip`, { type: 'application/zip' });
 }
@@ -111,22 +119,6 @@ async function readBackup(file: File): Promise<{ payload: Payload; pdfs: Map<str
   return { payload, pdfs };
 }
 
-/** Blob の中身をメモリに読み込んだ、独立したコピー（元のファイルが消えても読める） */
-export async function copyBlob(blob: Blob, type = blob.type || 'application/pdf'): Promise<Blob> {
-  return new Blob([await blob.arrayBuffer()], { type });
-}
-
-/** 保存されている参考書の中身が読めるか */
-export async function readable(blob: Blob | undefined) {
-  if (!blob) return false;
-  try {
-    await blob.slice(0, 1).arrayBuffer();
-    return true;
-  } catch {
-    return false;
-  }
-}
-
 export interface RestoreResult {
   /** 追加・更新したもの */
   books: number;
@@ -152,13 +144,17 @@ export async function restoreBackup(file: File): Promise<RestoreResult> {
   // 選んだファイルの一部を指したまま保存すると、iPad ではそのファイル（一時的な置き場所）が消えたあと読めなくなるため
   for (const { data: _data, fileType: _type, ...meta } of list(payload.books)) {
     const cur = await db.books.get(meta.id);
-    if (cur && (await readable(cur.file))) continue;
+    if (cur && (await hasBookBytes(meta.id))) continue;
     const pdf = pdfs.get(meta.id);
     if (!pdf) {
       r.missingBooks++;
       continue;
     }
-    await db.books.put({ ...meta, file: await copyBlob(pdf) });
+    const data = await pdf.arrayBuffer();
+    await db.transaction('rw', db.books, db.bookData, async () => {
+      await db.books.put({ ...meta, file: new Blob([], { type: pdf.type || 'application/pdf' }) });
+      await putBookBytes(meta.id, data);
+    });
     r.books++;
   }
 

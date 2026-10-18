@@ -159,6 +159,16 @@ export interface PetWorld {
   updatedAt: number;
 }
 
+/**
+ * 参考書の PDF の中身（ArrayBuffer）。
+ * iPad の Safari では、IndexedDB に保存した Blob を同じ起動中に 2 回目に読むと失敗することがあるので、
+ * 中身はデータそのものとして別の表に置く（参考書の一覧を読むときに PDF まで読み込まないよう、表を分ける）
+ */
+export interface BookData {
+  id: string;
+  data: ArrayBuffer;
+}
+
 class StudyDB extends Dexie {
   books!: Table<Book, string>;
   binders!: Table<Binder, string>;
@@ -170,6 +180,7 @@ class StudyDB extends Dexie {
   reviews!: Table<Review, string>;
   pets!: Table<Pet, string>;
   petWorld!: Table<PetWorld, string>;
+  bookData!: Table<BookData, string>;
 
   constructor() {
     // 保存データの名前は変えない（変えると既存のノートが読めなくなる）
@@ -184,6 +195,7 @@ class StudyDB extends Dexie {
     this.version(2).stores({ strokes: 'id, noteId' });
     this.version(3).stores({ inkItems: 'id, noteId', reviews: 'id, binderId, noteId, status' });
     this.version(4).stores({ pets: 'id, order', petWorld: 'id' });
+    this.version(5).stores({ bookData: 'id' });
   }
 }
 
@@ -200,24 +212,28 @@ export const BINDER_COLORS = ['#e0607e', '#f2a541', '#5aa469', '#4f86c6', '#9b6f
 
 export async function addBook(file: File): Promise<Book> {
   const count = await db.books.count();
-  // 選んだファイルを指したままにせず、中身をアプリの中に写して保存する（iPad で元の一時ファイルが消えても読めるように）
-  const data = new Blob([await file.arrayBuffer()], { type: file.type || 'application/pdf' });
+  const data = await file.arrayBuffer();
   const book: Book = {
     id: uid(),
     title: file.name.replace(/\.pdf$/i, ''),
     color: BOOK_COLORS[count % BOOK_COLORS.length],
-    file: data,
+    // 中身は bookData に置く（ここは空）
+    file: new Blob([], { type: file.type || 'application/pdf' }),
     fileName: file.name,
     size: file.size,
     createdAt: Date.now(),
   };
-  await db.books.add(book);
+  await db.transaction('rw', db.books, db.bookData, async () => {
+    await db.books.add(book);
+    await db.bookData.put({ id: book.id, data });
+  });
   return book;
 }
 
 export async function deleteBook(bookId: string) {
-  await db.transaction('rw', db.books, db.binders, db.bookmarks, async () => {
+  await db.transaction('rw', db.books, db.bookData, db.binders, db.bookmarks, async () => {
     await db.books.delete(bookId);
+    await db.bookData.delete(bookId);
     await db.bookmarks.where('bookId').equals(bookId).delete();
     await db.binders.toCollection().modify((b) => {
       b.bookIds = b.bookIds.filter((id) => id !== bookId);

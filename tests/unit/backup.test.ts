@@ -1,6 +1,9 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import { db, today } from '../../src/db';
-import { createBackup, readable, restoreBackup } from '../../src/lib/backup';
+import { readBookBytes } from '../../src/lib/bookData';
+import { createBackup, restoreBackup } from '../../src/lib/backup';
+
+const bookText = async (id: string) => new TextDecoder().decode(await readBookBytes(id));
 
 const pdf = (text: string) => new Blob([`%PDF-1.4 ${text}`], { type: 'application/pdf' });
 
@@ -27,8 +30,7 @@ describe('バックアップ', () => {
     await clearAll();
     const r = await restoreBackup(file);
     expect(r).toMatchObject({ books: 1, binders: 1, notes: 1, missingBooks: 0 });
-    const book = await db.books.get('b1');
-    expect(await book!.file.text()).toBe('%PDF-1.4 one');
+    expect(await bookText('b1')).toBe('%PDF-1.4 one');
     expect(await db.pets.count()).toBe(1);
     expect((await db.petWorld.get('world'))!.studySeconds).toBe(3600);
   });
@@ -79,7 +81,7 @@ describe('バックアップ', () => {
     };
     const r = await restoreBackup(new File([JSON.stringify(old)], 'old.json'));
     expect(r.books).toBe(1);
-    expect(await (await db.books.get('old'))!.file.text()).toBe('%PDF');
+    expect(await bookText('old')).toBe('%PDF');
   });
 
   it('項目が欠けたファイル・新しい形式・別のファイルを正しく扱う', async () => {
@@ -92,17 +94,22 @@ describe('バックアップ', () => {
   it('中身が読めなくなった参考書は、もう一度復元すると直る', async () => {
     await seed();
     const file = await createBackup('full');
-    // 以前の版で復元して、元のファイルが消えた状態をまねる
-    const broken = { slice: () => ({ arrayBuffer: () => Promise.reject(new DOMException('gone', 'NotFoundError')) }) } as unknown as Blob;
-    expect(await readable(broken)).toBe(false);
-    const get = db.books.get.bind(db.books);
-    const spy = vi.spyOn(db.books, 'get').mockImplementation((async (id: string) => {
-      const b = await get(id);
-      return b && { ...b, file: broken };
-    }) as typeof db.books.get);
+    // 以前の版で保存した Blob が読めなくなった状態をまねる（bookData に無く、Blob は空）
+    await db.bookData.clear();
+    await db.books.update('b1', { file: new Blob([]) });
+    await expect(readBookBytes('b1')).rejects.toThrow('読めなくなっています');
     const r = await restoreBackup(file);
-    spy.mockRestore();
     expect(r.books).toBe(1);
-    expect(await (await db.books.get('b1'))!.file.text()).toBe('%PDF-1.4 one');
+    expect(await bookText('b1')).toBe('%PDF-1.4 one');
+  }, 15_000);
+
+  it('以前の版の参考書（Blob で保存）は、読んだときに新しい形に移る', async () => {
+    await seed();
+    expect(await db.bookData.get('b1')).toBeUndefined();
+    expect(await bookText('b1')).toBe('%PDF-1.4 one');
+    expect(await db.bookData.get('b1')).toBeDefined();
+    expect((await db.books.get('b1'))!.file.size).toBe(0);
+    // 2 回目以降は bookData から読む
+    expect(await bookText('b1')).toBe('%PDF-1.4 one');
   });
 });
