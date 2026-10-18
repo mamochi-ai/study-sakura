@@ -1,6 +1,7 @@
 import { useLiveQuery } from 'dexie-react-hooks';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createReview, db, REVIEW_STATUS, uid, type InkItem, type Note, type Stroke } from '../db';
+import { saveErrorText } from '../lib/errors';
 import { formatDate } from '../lib/format';
 import { markerByInkColor, MARKERS, RED_PENS } from '../lib/memorize';
 import { getSettings, useSettings } from '../lib/settings';
@@ -235,7 +236,7 @@ export default function InkEditor({ note }: { note: Note }) {
         setStatus('saved');
       } catch (e) {
         setStatus('error');
-        toast(`保存できませんでした：${(e as Error).message}`);
+        toast(`保存できませんでした：${saveErrorText(e)}`);
       }
     },
     [note.id],

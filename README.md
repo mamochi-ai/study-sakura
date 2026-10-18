@@ -95,3 +95,13 @@ src/
   components/NoteEditor.tsx / NoteList.tsx ノート
   editor/                TipTap 拡張（ページ参照・数式・スラッシュメニュー）
 ```
+
+## テスト
+
+```
+npm test              # 単体テスト（Vitest。IndexedDB は fake-indexeddb）
+npx playwright test   # 画面操作のテスト（ビルドして iPad と同じ画面の大きさで確認）
+```
+
+GitHub に push / プルリクエストを作ると、`.github/workflows/test.yml` で型チェック・単体テスト・画面操作のテストが自動で動きます。
+iPad の Safari（WebKit）での確認は、実機のチェックリスト `docs/ipad.md` で行います。

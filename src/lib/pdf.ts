@@ -8,27 +8,40 @@ pdfjs.GlobalWorkerOptions.workerSrc = workerUrl;
 export { pdfjs };
 export type { PDFDocumentProxy };
 
+/** 開いている参考書（最近使った順）。メモリを使いすぎないよう、同時に持つのは MAX_OPEN 冊まで */
 const cache = new Map<string, Promise<PDFDocumentProxy>>();
+const MAX_OPEN = 2;
+
+async function openBook(bookId: string): Promise<PDFDocumentProxy> {
+  const book = await db.books.get(bookId);
+  if (!book) throw new Error('参考書が見つかりません（削除された可能性があります）');
+  const data = new Uint8Array(await book.file.arrayBuffer());
+  const doc = await pdfjs.getDocument({
+    data,
+    cMapUrl: `${import.meta.env.BASE_URL}pdfjs/cmaps/`,
+    cMapPacked: true,
+    standardFontDataUrl: `${import.meta.env.BASE_URL}pdfjs/standard_fonts/`,
+  }).promise;
+  if (book.pageCount !== doc.numPages) db.books.update(bookId, { pageCount: doc.numPages });
+  return doc;
+}
 
 /** 参考書の PDF を読み込む（同じ参考書は使い回す） */
 export function loadBookPdf(bookId: string): Promise<PDFDocumentProxy> {
   let p = cache.get(bookId);
-  if (!p) {
-    p = (async () => {
-      const book = await db.books.get(bookId);
-      if (!book) throw new Error('参考書が見つかりません');
-      const data = new Uint8Array(await book.file.arrayBuffer());
-      const doc = await pdfjs.getDocument({
-        data,
-        cMapUrl: `${import.meta.env.BASE_URL}pdfjs/cmaps/`,
-        cMapPacked: true,
-        standardFontDataUrl: `${import.meta.env.BASE_URL}pdfjs/standard_fonts/`,
-      }).promise;
-      if (book.pageCount !== doc.numPages) db.books.update(bookId, { pageCount: doc.numPages });
-      return doc;
-    })();
-    p.catch(() => cache.delete(bookId));
+  if (p) {
+    // 最近使ったものとして並べ直す
+    cache.delete(bookId);
     cache.set(bookId, p);
+    return p;
+  }
+  p = openBook(bookId);
+  p.catch(() => cache.delete(bookId));
+  cache.set(bookId, p);
+  // 古いものから閉じる
+  for (const id of cache.keys()) {
+    if (cache.size <= MAX_OPEN) break;
+    if (id !== bookId) forgetBookPdf(id);
   }
   return p;
 }
@@ -39,17 +52,36 @@ export function forgetBookPdf(bookId: string) {
   p?.then((d) => d.destroy()).catch(() => {});
 }
 
-/** 表紙のサムネイルを生成 */
-export async function renderCover(bookId: string, width = 160): Promise<string> {
-  const doc = await loadBookPdf(bookId);
-  const page = await doc.getPage(1);
-  const base = page.getViewport({ scale: 1 });
-  const viewport = page.getViewport({ scale: width / base.width });
-  const canvas = document.createElement('canvas');
-  canvas.width = viewport.width;
-  canvas.height = viewport.height;
-  await page.render({ canvasContext: canvas.getContext('2d')!, viewport }).promise;
-  return canvas.toDataURL('image/jpeg', 0.8);
+/** 開いている参考書をすべて閉じる（バインダーを閉じたとき） */
+export function forgetAllPdfs() {
+  for (const id of [...cache.keys()]) forgetBookPdf(id);
+}
+
+let coverQueue: Promise<unknown> = Promise.resolve();
+
+/** 表紙のサムネイルを生成（1 冊ずつ順番に。開いていない参考書は描いたらすぐ閉じる） */
+export function renderCover(bookId: string, width = 160): Promise<string> {
+  const run = async () => {
+    const cached = cache.get(bookId);
+    const doc = cached ? await cached : await openBook(bookId);
+    try {
+      const page = await doc.getPage(1);
+      const base = page.getViewport({ scale: 1 });
+      const viewport = page.getViewport({ scale: width / base.width });
+      const canvas = document.createElement('canvas');
+      canvas.width = viewport.width;
+      canvas.height = viewport.height;
+      await page.render({ canvasContext: canvas.getContext('2d')!, viewport }).promise;
+      const url = canvas.toDataURL('image/jpeg', 0.8);
+      canvas.width = canvas.height = 0;
+      return url;
+    } finally {
+      if (!cached) doc.destroy();
+    }
+  };
+  const p = coverQueue.then(run, run);
+  coverQueue = p.catch(() => {});
+  return p;
 }
 
 export interface OutlineItem {
@@ -81,22 +113,31 @@ export async function getOutline(doc: PDFDocumentProxy): Promise<OutlineItem[]> 
 }
 
 const textCache = new WeakMap<PDFDocumentProxy, Promise<string[]>>();
+const textListeners = new WeakMap<PDFDocumentProxy, Set<(done: number, total: number) => void>>();
 
-/** 全ページのテキスト（検索用） */
-export function getAllText(doc: PDFDocumentProxy): Promise<string[]> {
+/** 全ページのテキスト（検索用）。初回は全ページを読むので、進み具合を onProgress で知らせる */
+export function getAllText(doc: PDFDocumentProxy, onProgress?: (done: number, total: number) => void): Promise<string[]> {
+  let listeners = textListeners.get(doc);
+  if (!listeners) textListeners.set(doc, (listeners = new Set()));
+  if (onProgress) listeners.add(onProgress);
   let p = textCache.get(doc);
   if (!p) {
+    const ls = listeners;
     p = (async () => {
       const out: string[] = [];
       for (let i = 1; i <= doc.numPages; i++) {
         const page = await doc.getPage(i);
         const tc = await page.getTextContent();
         out.push(tc.items.map((it) => ('str' in it ? it.str + (it.hasEOL ? '\n' : '') : '')).join(''));
+        page.cleanup();
+        if (i % 5 === 0 || i === doc.numPages) ls.forEach((f) => f(i, doc.numPages));
       }
       return out;
     })();
+    p.catch(() => textCache.delete(doc));
     textCache.set(doc, p);
   }
+  if (onProgress) p.finally(() => listeners!.delete(onProgress)).catch(() => {});
   return p;
 }
 

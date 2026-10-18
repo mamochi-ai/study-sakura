@@ -3,12 +3,16 @@ import { createRoot } from 'react-dom/client';
 import 'katex/dist/katex.min.css';
 import './styles.css';
 import App from './App';
+import { getSettings } from './lib/settings';
 
 // ブラウザにデータを消されにくくする
 navigator.storage?.persist?.().catch(() => {});
 
 // iPad：画面全体がピンチで拡大されないようにする（参考書は独自に拡大縮小できる）
-document.addEventListener('gesturestart', (e) => e.preventDefault());
+// 設定で「画面全体の拡大」を許可したときは止めない
+document.addEventListener('gesturestart', (e) => {
+  if (!getSettings().allowPageZoom) e.preventDefault();
+});
 
 // 開いているメニュー（details.menu）は、外側をタップしたら閉じる
 document.addEventListener('pointerdown', (e) => {
@@ -26,6 +30,8 @@ document.addEventListener('click', (e) => {
 // （キーボードが出ているときは iPad に任せる）
 const resetPageScroll = () => {
   if (window.scrollX === 0 && window.scrollY === 0) return;
+  // 拡大している間は、拡大した位置を動かさない
+  if (getSettings().allowPageZoom && (window.visualViewport?.scale ?? 1) > 1.01) return;
   const a = document.activeElement as HTMLElement | null;
   if (a && (a.isContentEditable || a.matches('input, textarea, select'))) return;
   window.scrollTo(0, 0);
