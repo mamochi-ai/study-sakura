@@ -44,6 +44,8 @@ const Room = forwardRef<RoomHandle, { items: string[]; pets: Pet[]; fresh?: stri
   world.nav = nav;
   world.items = items;
   const ballRef = useRef<HTMLImageElement>(null);
+  // 自動テスト用：?petdebug を付けて開くと、部屋の状態を外から見られる
+  if (location.search.includes('petdebug')) (window as unknown as { __petWorld: World }).__petWorld = world;
 
   useLayoutEffect(() => {
     const box = boxRef.current!;
@@ -79,7 +81,7 @@ const Room = forwardRef<RoomHandle, { items: string[]; pets: Pet[]; fresh?: stri
     let raf = 0;
     let last = performance.now();
     // 前のフレームで書いた値。変わったときだけ DOM に書く（5 匹でも軽く保つ）
-    const shown = new Map<string, { file: string; frame: number; transform: string; z: number; state: string }>();
+    const shown = new Map<string, { file: string; frame: number; transform: string; z: number; state: string; duo: string }>();
     const tick = (now: number) => {
       const dt = Math.min(0.1, (now - last) / 1000);
       last = now;
@@ -92,9 +94,9 @@ const Room = forwardRef<RoomHandle, { items: string[]; pets: Pet[]; fresh?: stri
         const sprite = el.firstElementChild as HTMLElement;
         const size = sizeOf(a.pet.species);
         const k = size / CELL;
-        const def = animOf(a.pet.species, a.anim());
+        const def = animOf(a.pet.species, a.anim(now));
         let prev = shown.get(id);
-        if (!prev) shown.set(id, (prev = { file: '', frame: -1, transform: '', z: -1, state: '' }));
+        if (!prev) shown.set(id, (prev = { file: '', frame: -1, transform: '', z: -1, state: '', duo: '' }));
         if (prev.file !== def.file) {
           prev.file = def.file;
           prev.frame = -1;
@@ -108,6 +110,8 @@ const Room = forwardRef<RoomHandle, { items: string[]; pets: Pet[]; fresh?: stri
         const z = a.depth();
         if (prev.z !== z) el.style.zIndex = String((prev.z = z));
         if (prev.state !== a.state) el.dataset.state = prev.state = a.state;
+        const duo = a.duo ? `${a.duo.kind}${a.duo.begun ? '' : '…'}` : '';
+        if (prev.duo !== duo) el.dataset.duo = prev.duo = duo;
       }
       // 遊ぶ絵にはボールが描かれているので、そのあいだ部屋のボールは隠す
       if (ballRef.current) ballRef.current.style.visibility = ballHeld ? 'hidden' : '';
