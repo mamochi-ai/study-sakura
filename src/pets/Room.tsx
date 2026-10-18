@@ -40,7 +40,7 @@ const Room = forwardRef<RoomHandle, { items: string[]; pets: Pet[]; fresh?: stri
   const actors = useRef(new Map<string, PetActor>());
   const els = useRef(new Map<string, HTMLDivElement>());
   const nav = useMemo(() => new NavMap(items), [items.join()]);
-  const world = useRef<World>({ nav, items, taken: new Map() }).current;
+  const world = useRef<World>({ nav, items, taken: new Map(), actors: [] }).current;
   world.nav = nav;
   world.items = items;
   const ballRef = useRef<HTMLImageElement>(null);
@@ -71,13 +71,15 @@ const Room = forwardRef<RoomHandle, { items: string[]; pets: Pet[]; fresh?: stri
       a.release(world);
       map.delete(id);
     }
+    world.actors = [...map.values()];
   }, [pets, world]);
 
   // 動かす。画面が隠れている間は止める
   useEffect(() => {
     let raf = 0;
     let last = performance.now();
-    const shown = new Map<string, string>();
+    // 前のフレームで書いた値。変わったときだけ DOM に書く（5 匹でも軽く保つ）
+    const shown = new Map<string, { file: string; frame: number; transform: string; z: number; state: string }>();
     const tick = (now: number) => {
       const dt = Math.min(0.1, (now - last) / 1000);
       last = now;
@@ -87,19 +89,25 @@ const Room = forwardRef<RoomHandle, { items: string[]; pets: Pet[]; fresh?: stri
         ballHeld ||= a.holdsBall();
         const el = els.current.get(id);
         if (!el) continue;
+        const sprite = el.firstElementChild as HTMLElement;
         const size = sizeOf(a.pet.species);
         const k = size / CELL;
         const def = animOf(a.pet.species, a.anim());
-        if (shown.get(id) !== def.file) {
-          shown.set(id, def.file);
-          const sprite = el.firstElementChild as HTMLElement;
+        let prev = shown.get(id);
+        if (!prev) shown.set(id, (prev = { file: '', frame: -1, transform: '', z: -1, state: '' }));
+        if (prev.file !== def.file) {
+          prev.file = def.file;
+          prev.frame = -1;
           sprite.style.backgroundImage = `url(${assetUrl(`pets/${def.file}`)})`;
           sprite.style.backgroundSize = `${def.frames * size}px ${size}px`;
         }
-        (el.firstElementChild as HTMLElement).style.backgroundPosition = `${-a.frame(now) * size}px 0`;
-        el.style.transform = `translate(${a.pos.x - ANCHOR[0] * k}px, ${a.pos.y - ANCHOR[1] * k}px)`;
-        el.style.zIndex = String(a.depth());
-        el.dataset.state = a.state;
+        const frame = a.frame(now);
+        if (prev.frame !== frame) sprite.style.backgroundPosition = `${-(prev.frame = frame) * size}px 0`;
+        const transform = `translate(${(a.pos.x - ANCHOR[0] * k).toFixed(1)}px, ${(a.pos.y - ANCHOR[1] * k).toFixed(1)}px)`;
+        if (prev.transform !== transform) el.style.transform = prev.transform = transform;
+        const z = a.depth();
+        if (prev.z !== z) el.style.zIndex = String((prev.z = z));
+        if (prev.state !== a.state) el.dataset.state = prev.state = a.state;
       }
       // 遊ぶ絵にはボールが描かれているので、そのあいだ部屋のボールは隠す
       if (ballRef.current) ballRef.current.style.visibility = ballHeld ? 'hidden' : '';

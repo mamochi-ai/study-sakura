@@ -1,12 +1,12 @@
 import type { Pet } from '../db';
-import { NavMap, type Pt } from './nav';
+import { bodyDist, NavMap, type Pt } from './nav';
 import { currentFullness, HUNGRY_AT } from './rules';
 import { animOf, frameAt, ROOM } from './sprite';
 
 export type PetState = 'idle' | 'walk' | 'eat' | 'happy' | 'hungry' | 'sleep' | 'play' | 'interact' | 'surprise';
 export type Dir = 'front' | 'back' | 'left' | 'right';
 /** 歩いた先で何をするか */
-type Goal = 'wander' | 'eat' | 'stare' | 'perch' | 'climb' | 'leave' | 'ball' | 'mouse';
+type Goal = 'wander' | 'eat' | 'stare' | 'perch' | 'climb' | 'leave' | 'ball' | 'mouse' | 'buddy';
 
 /**
  * 状態マシン：今の状態から移れる状態。ここに無い移り方はしない
@@ -33,6 +33,8 @@ export interface World {
   items: string[];
   /** 誰かが使っている場所（寝床・クッション・ボールなど）。同時に 2 匹は使わない */
   taken: Map<string, string>;
+  /** 部屋にいる全員 */
+  actors: PetActor[];
 }
 
 /** 1 秒あたりに歩く距離（部屋の座標） */
@@ -76,12 +78,15 @@ function perchOf(key: string): Perch | null {
 /** 餌皿のまわりで食べる場所。何匹かで食べるときは並ぶ */
 function bowlSpot(slot = 0) {
   const bowl = ROOM.items.bowl;
+  const cx = bowl.x + bowl.w * 0.5;
+  // 餌皿が隠れないよう、横と斜め前に広げて並ぶ
   const spots = [
-    { x: bowl.x - 50, y: bowl.groundY - 10 },
-    { x: bowl.x + bowl.w + 50, y: bowl.groundY - 10 },
-    { x: bowl.x + bowl.w * 0.5 - 70, y: bowl.groundY + 60 },
-    { x: bowl.x + bowl.w * 0.5 + 90, y: bowl.groundY + 70 },
-    { x: bowl.x - 150, y: bowl.groundY + 40 },
+    // 右どなりはボールとキャットタワーがあるので、右側は斜め前に並ぶ
+    { x: bowl.x - 64, y: bowl.groundY - 10 },
+    { x: cx + 236, y: bowl.groundY + 94 },
+    { x: cx - 314, y: bowl.groundY + 89 },
+    { x: cx + 426, y: bowl.groundY + 84 },
+    { x: cx - 484, y: bowl.groundY + 4 },
   ];
   return spots[slot % spots.length];
 }
@@ -121,6 +126,13 @@ export class PetActor {
   private slot = 0;
   /** 使っている場所（World.taken のキー） */
   private claim: string | null = null;
+  /** 歩いて向かっている先 */
+  dest: Pt | null = null;
+  /** ほかの子に道をふさがれて待っている時間（秒） */
+  private waited = 0;
+  private rerouted = 0;
+  /** この時刻までは、ほかの子と重なっても進む */
+  private ghostUntil = 0;
 
   constructor(pet: Pet, pos: Pt, now: number) {
     this.pet = pet;
@@ -140,7 +152,7 @@ export class PetActor {
 
   /** 今のアニメーション名 */
   anim() {
-    if (this.state === 'walk') return `walk_${this.dir}`;
+    if (this.state === 'walk') return this.waited > 0 ? 'idle' : `walk_${this.dir}`;
     if (this.state === 'interact') return 'happy';
     return this.state;
   }
@@ -174,15 +186,53 @@ export class PetActor {
     this.claim = null;
   }
 
+  /** 床で止まっているほかの子（よける相手） */
+  private others(world: World) {
+    return world.actors.filter((o) => o !== this && !o.perch);
+  }
+
+  /** 道順を探すときによける点：止まっている子の位置と、歩いている子の行き先 */
+  private avoidList(world: World) {
+    return this.others(world).flatMap((o) => (o.state === 'walk' ? (o.dest ? [o.dest] : []) : [o.pos]));
+  }
+
   private walkTo(goal: Goal, target: Pt, world: World, now: number) {
-    const path = world.nav.path(this.pos, target);
+    const path = world.nav.path(this.pos, target, this.avoidList(world));
     if (!path) {
       this.release(world);
       return this.set('idle', now, 2000);
     }
     this.path = path;
     this.goal = goal;
+    this.dest = path[path.length - 1];
+    this.waited = 0;
     if (!this.set('walk', now, Infinity)) this.path = [];
+  }
+
+  /** ほかの子と離れた、歩ける場所 */
+  private spacious(world: World, rand: () => number) {
+    const others = this.others(world);
+    let best = world.nav.randomPoint(rand);
+    let bestD = -1;
+    for (let i = 0; i < 12; i++) {
+      const p = world.nav.randomPoint(rand);
+      const d = Math.min(Infinity, ...others.flatMap((o) => [o.pos, ...(o.dest ? [o.dest] : [])]).map((q) => bodyDist(p, q)));
+      if (d > 4) return p;
+      if (d > bestD) [best, bestD] = [p, d];
+    }
+    return best;
+  }
+
+  /** 床で休んでいる仲間のとなり */
+  private besideBuddy(world: World, rand: () => number): Pt | null {
+    const buddies = this.others(world).filter((o) => o.state === 'idle' || o.state === 'sleep');
+    if (!buddies.length) return null;
+    const b = buddies[Math.floor(rand() * buddies.length)];
+    for (const side of rand() < 0.5 ? [-1, 1] : [1, -1]) {
+      const p = { x: b.pos.x + side * 150, y: b.pos.y + 6 };
+      if (world.nav.walkable(p) && this.others(world).every((o) => bodyDist(p, o.pos) > 1.4)) return p;
+    }
+    return null;
   }
 
   /** ごはんを食べに行く（餌の消費は world.ts の feedPets） */
@@ -241,6 +291,12 @@ export class PetActor {
       return;
     }
     this.release(world);
+    // 食べ終わったあとなどに、ほかの子と重なっていたら少し離れる
+    const crowd = this.others(world).find((o) => o.state !== 'walk' && bodyDist(this.pos, o.pos) < 0.8);
+    if (crowd) {
+      const side = this.pos.x >= crowd.pos.x ? 1 : -1;
+      return this.walkTo('wander', { x: this.pos.x + side * 200, y: this.pos.y + (rand() - 0.5) * 80 }, world, now);
+    }
     if (this.after) {
       this.after = null;
       return this.walkTo('eat', bowlSpot(this.slot), world, now);
@@ -249,13 +305,17 @@ export class PetActor {
     const hungry = currentFullness(this.pet) <= HUNGRY_AT;
     if (hungry && items.includes('bowl') && now - this.lastStare > 40_000) {
       this.lastStare = now;
-      return this.walkTo('stare', bowlSpot(), world, now);
+      return this.walkTo('stare', bowlSpot(world.actors.indexOf(this)), world, now);
     }
-    const free = (key: string) => items.includes(key) && !world.taken.has(key);
+    // おもちゃは、そばにほかの子が止まっていないときだけ
+    const roomy = (p: Pt) => this.others(world).every((o) => o.state === 'walk' || bodyDist(p, o.pos) > 1.5);
+    const free = (key: string) =>
+      items.includes(key) && !world.taken.has(key) && (key !== 'ball' && key !== 'mouse' ? true : roomy(toySpot(key)));
     const choice = pick<string>(
       [
         [40, 'wander'],
         [25, 'stay'],
+        [world.actors.length > 1 ? 15 : 0, 'buddy'],
         [free('bed') ? 12 : 0, 'bed'],
         [free('cushion') ? 12 : 0, 'cushion'],
         [free('cat_tower') ? 8 : 0, 'cat_tower'],
@@ -266,7 +326,12 @@ export class PetActor {
     );
     switch (choice) {
       case 'wander':
-        return this.walkTo('wander', world.nav.randomPoint(rand), world, now);
+        return this.walkTo('wander', this.spacious(world, rand), world, now);
+      case 'buddy': {
+        const p = this.besideBuddy(world, rand);
+        if (p) return this.walkTo('buddy', p, world, now);
+        break;
+      }
       case 'bed':
       case 'cushion':
       case 'cat_tower': {
@@ -289,6 +354,31 @@ export class PetActor {
     const dy = target.y - this.pos.y;
     const dist = Math.hypot(dx, dy);
     const move = SPEED * dt;
+    // 家具の上り下りの間は、ほかの子を気にしない
+    if (!this.perch && dist > 1) {
+      const ahead = { x: this.pos.x + (dx / dist) * 45, y: this.pos.y + (dy / dist) * 45 };
+      const blocker = this.others(world).find((o) => bodyDist(ahead, o.pos) < 1 && bodyDist(ahead, o.pos) < bodyDist(this.pos, o.pos));
+      if (blocker && now > this.ghostUntil) {
+        this.waited += dt;
+        // 相手も歩いているなら、少し待てばどいてくれる
+        if (blocker.state === 'walk' && this.waited < 1.2) return;
+        // 止まっている相手や、長く待ったときは回り道を探す（探すのは 0.8 秒に 1 回まで）
+        const end = this.path[this.path.length - 1];
+        if (this.goal && end && now - this.rerouted > 800) {
+          this.rerouted = now;
+          const path = world.nav.path(this.pos, end, [blocker.pos, ...this.avoidList(world)]);
+          if (path) {
+            this.path = path;
+            this.waited = 0;
+            return;
+          }
+        }
+        // どうしても動けないときは、すれ違う（重なって通り抜ける）
+        if (this.waited > 4) this.ghostUntil = now + 1500;
+        return;
+      }
+      this.waited = 0;
+    }
     if (dist > 1) {
       // 奥行き方向は画面上で短く見えるので、横向きを優先する
       this.dir = Math.abs(dx) > Math.abs(dy) * 0.8 ? (dx < 0 ? 'left' : 'right') : dy < 0 ? 'back' : 'front';
@@ -304,6 +394,7 @@ export class PetActor {
   private arrive(now: number, world: World) {
     const goal = this.goal;
     this.goal = null;
+    this.dest = null;
     this.dir = 'front';
     switch (goal) {
       case 'eat':
@@ -317,6 +408,11 @@ export class PetActor {
         return;
       case 'mouse':
         this.set('happy', now, sec(3, 5, Math.random));
+        return;
+      case 'buddy':
+        // 仲間のとなりで休む
+        if (Math.random() < 0.4) this.set('sleep', now, sec(15, 25, Math.random));
+        else this.set('idle', now, sec(8, 14, Math.random));
         return;
       case 'perch': {
         // 家具の前まで来たら、上に乗る（家具の上は地図の外なので、道順を使わず直接）
