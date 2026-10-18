@@ -1,6 +1,6 @@
 import { forwardRef, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { Pet } from '../db';
-import { PetActor } from './brain';
+import { PetActor, type World } from './brain';
 import { NavMap, type Pt } from './nav';
 import { speciesOf } from './species';
 import { ANCHOR, animOf, assetUrl, CELL, ROOM } from './sprite';
@@ -34,16 +34,16 @@ export interface RoomHandle {
 }
 
 /** 部屋（背景・家具・ペット）。座標は素材と同じ 1536×1024 で、画面に合わせて縮小する */
-const Room = forwardRef<RoomHandle, { items: string[]; pets: Pet[]; onTapBowl: () => void }>(function Room({ items, pets, onTapBowl }, ref) {
+const Room = forwardRef<RoomHandle, { items: string[]; pets: Pet[]; fresh?: string[]; onTapBowl: () => void }>(function Room({ items, pets, fresh = [], onTapBowl }, ref) {
   const boxRef = useRef<HTMLDivElement>(null);
   const [scale, setScale] = useState(0);
   const actors = useRef(new Map<string, PetActor>());
   const els = useRef(new Map<string, HTMLDivElement>());
   const nav = useMemo(() => new NavMap(items), [items.join()]);
-  const navRef = useRef(nav);
-  navRef.current = nav;
-  const itemsRef = useRef(items);
-  itemsRef.current = items;
+  const world = useRef<World>({ nav, items, taken: new Map() }).current;
+  world.nav = nav;
+  world.items = items;
+  const ballRef = useRef<HTMLImageElement>(null);
 
   useLayoutEffect(() => {
     const box = boxRef.current!;
@@ -63,11 +63,15 @@ const Room = forwardRef<RoomHandle, { items: string[]; pets: Pet[]; onTapBowl: (
       if (a) a.pet = p;
       else {
         preload(p.species);
-        map.set(p.id, new PetActor(p, navRef.current.nearestFree(SPOTS[i % SPOTS.length]), now));
+        map.set(p.id, new PetActor(p, world.nav.nearestFree(SPOTS[i % SPOTS.length]), now));
       }
     });
-    for (const id of map.keys()) if (!pets.some((p) => p.id === id)) map.delete(id);
-  }, [pets]);
+    for (const [id, a] of map) {
+      if (pets.some((p) => p.id === id)) continue;
+      a.release(world);
+      map.delete(id);
+    }
+  }, [pets, world]);
 
   // 動かす。画面が隠れている間は止める
   useEffect(() => {
@@ -77,8 +81,10 @@ const Room = forwardRef<RoomHandle, { items: string[]; pets: Pet[]; onTapBowl: (
     const tick = (now: number) => {
       const dt = Math.min(0.1, (now - last) / 1000);
       last = now;
+      let ballHeld = false;
       for (const [id, a] of actors.current) {
-        a.update(dt, now, navRef.current, itemsRef.current);
+        a.update(dt, now, world);
+        ballHeld ||= a.holdsBall();
         const el = els.current.get(id);
         if (!el) continue;
         const size = sizeOf(a.pet.species);
@@ -95,6 +101,8 @@ const Room = forwardRef<RoomHandle, { items: string[]; pets: Pet[]; onTapBowl: (
         el.style.zIndex = String(a.depth());
         el.dataset.state = a.state;
       }
+      // 遊ぶ絵にはボールが描かれているので、そのあいだ部屋のボールは隠す
+      if (ballRef.current) ballRef.current.style.visibility = ballHeld ? 'hidden' : '';
       raf = requestAnimationFrame(tick);
     };
     const start = () => {
@@ -109,12 +117,12 @@ const Room = forwardRef<RoomHandle, { items: string[]; pets: Pet[]; onTapBowl: (
       cancelAnimationFrame(raf);
       document.removeEventListener('visibilitychange', onVisibility);
     };
-  }, []);
+  }, [world]);
 
   useImperativeHandle(ref, () => ({
     eat: (ids) => {
       const now = performance.now();
-      ids.forEach((id, i) => actors.current.get(id)?.feed(now, navRef.current, i));
+      ids.forEach((id, i) => actors.current.get(id)?.feed(now, world, i));
     },
   }));
 
@@ -127,7 +135,8 @@ const Room = forwardRef<RoomHandle, { items: string[]; pets: Pet[]; onTapBowl: (
         {furniture.map(([key, it]) => (
           <img
             key={key}
-            className={`room-item${key === 'bowl' ? ' tappable' : ''}`}
+            ref={key === 'ball' ? ballRef : undefined}
+            className={`room-item${key === 'bowl' ? ' tappable' : ''}${fresh.includes(key) ? ' fresh' : ''}`}
             src={assetUrl(`room/${it.file}`)}
             alt=""
             draggable={false}
@@ -148,7 +157,7 @@ const Room = forwardRef<RoomHandle, { items: string[]; pets: Pet[]; onTapBowl: (
               className="room-pet"
               role="button"
               aria-label={p.name}
-              onClick={() => actors.current.get(p.id)?.poke(performance.now())}
+              onClick={() => actors.current.get(p.id)?.poke(performance.now(), world)}
             >
               <div className="sprite" style={{ width: size, height: size }} />
             </div>

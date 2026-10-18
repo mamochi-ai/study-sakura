@@ -60,7 +60,8 @@ def anim_entry(rel, frames, meta):
         e['sequence'] = [n - 1 for n in seq]
     if meta.get('return_to'):
         e['returnTo'] = meta['return_to']
-    if meta.get('contains_toy_ball'):
+    # 「遊ぶ」の絵にはどの種類にもボールが描かれている（マーモットの設定には印が無い）
+    if meta.get('contains_toy_ball') or rel.endswith('/play.webp'):
         e['hidesBall'] = True
     return e
 
