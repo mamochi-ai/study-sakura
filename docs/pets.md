@@ -161,3 +161,33 @@ interface PetWorld {    // petWorld テーブル（1 件、id = 'world'）
 | E | 複数匹の自律行動と、ぶつからない移動 |
 | F | 仲間との交流 |
 | G | アニメーションの調整と iPad 実機テスト |
+
+## 素材の差し替え（Phase G）
+
+画像を描き直したときや、動きを追加したときの手順。PC が必要（Python 3 と Pillow）。
+
+1. 素材を、今と同じ並びのフォルダに展開する
+   - 犬・猫・鳥：`<種類>/<動き>/<動き>_01.png〜08.png` と `<種類>/animation.json`
+   - 遊ぶ・喜ぶ・びっくり：同じ形で別フォルダ
+   - マーモット：歩く（`front/back/left/right`）、食べる・空腹・寝る、遊ぶ・喜ぶ・びっくり
+   - 待機：`01_marmot_idle.png` 〜 `10_java_sparrow_idle.png`
+   - 部屋：`stage_4/layout.json`・背景・`assets/<家具>.png`
+2. 変換する
+   ```
+   python3 -I scripts/build-pet-assets.py \
+     --dogs <犬> --cats <猫> --birds <鳥> --extra <遊ぶ・喜ぶ・びっくり> --idle <待機> \
+     --marmot-walk <マーモット歩く> --marmot-eat <マーモット食べる等> --marmot-extra <マーモット遊ぶ等> --room <部屋>
+   ```
+   `public/assets/pets`・`public/assets/room` の WebP と、`src/pets/assets.json` が作り直される
+3. コマ数・1 コマの時間・ループ・終わったら戻る動きは、各 `animation.json` の
+   `playback_sequence`・`frame_duration_ms`・`loop`・`return_to` で決まる。変換後に `src/pets/assets.json` を直接直してもよい
+4. 1 コマは 256×256、足元は (128, 232) にそろえる。ずれる場合は `assets.json` の `anchor` を変える
+5. 部屋に描く大きさは `src/pets/species.ts` の `scale`、歩く速さは `brain.ts` の `SPEED`
+
+素材が欠けていても動く：読み込めなかった動きは待機の静止画で、待機も無ければ 🐾 で仮に表示する。
+
+## ノート画面の小さなペット
+
+- 上のバー（タイマーの左）に、ノート画面に出すと決めた子を表示。タップで部屋を開く
+- Pencil の描画を邪魔しないよう、コマ送りはせず、ゆっくり呼吸するような小さな変形だけ（CSS の transform）。端末の「視差効果を減らす」がオンなら止める
+- 満腹度 30 以下で 🍖 のマーク
