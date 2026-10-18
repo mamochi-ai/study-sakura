@@ -256,6 +256,10 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
         <input type="checkbox" checked={s.syncNotePage} onChange={(e) => updateSettings({ syncNotePage: e.target.checked })} />
         ノートを切り替えたら、そのノートで最後に見ていた参考書のページを開く
       </label>
+      <label className="check">
+        <input type="checkbox" checked={s.allowPageZoom} onChange={(e) => updateSettings({ allowPageZoom: e.target.checked })} />
+        画面全体を 2 本指で拡大できるようにする（文字が見えにくいとき。参考書と手書きノートの上では、それぞれの拡大・スクロールが優先されます）
+      </label>
       <div className="field storage-usage">
         <span>保存しているデータ</span>
         <div>

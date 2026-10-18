@@ -12,12 +12,14 @@ export interface Settings {
   /** 暗記シートで隠すもの */
   hideRed: boolean;
   hideMarkers: MarkerName[];
+  /** 画面全体をピンチで拡大できるようにする（見えにくいとき用。ふだんは誤操作を防ぐため止める） */
+  allowPageZoom: boolean;
 }
 
 export type MarkerName = 'yellow' | 'pink' | 'green' | 'blue' | 'orange';
 
 const KEY = 'study-sakura:settings';
-const defaults: Settings = { theme: 'system', pomodoroWork: 25, pomodoroBreak: 5, noteFontSize: 16, syncNotePage: true, defaultPaper: 'lined', hideRed: true, hideMarkers: ['yellow', 'green'] };
+const defaults: Settings = { theme: 'system', pomodoroWork: 25, pomodoroBreak: 5, noteFontSize: 16, syncNotePage: true, defaultPaper: 'lined', hideRed: true, hideMarkers: ['yellow', 'green'], allowPageZoom: false };
 
 let state: Settings = (() => {
   try {
