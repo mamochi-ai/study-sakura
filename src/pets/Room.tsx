@@ -3,7 +3,7 @@ import type { Pet } from '../db';
 import { PetActor, type World } from './brain';
 import { NavMap, type Pt } from './nav';
 import { speciesOf } from './species';
-import { ANCHOR, animOf, assetUrl, CELL, ROOM } from './sprite';
+import { ANCHOR, animOf, assetUrl, CELL, preloadSpecies, ROOM } from './sprite';
 
 /** ペットが最初に立つ場所（部屋の座標、足元） */
 const SPOTS: Pt[] = [
@@ -15,18 +15,6 @@ const SPOTS: Pt[] = [
 ];
 
 const sizeOf = (species: string) => Math.round(CELL * speciesOf(species).scale * 1.1);
-
-/** 使うかもしれないアニメーションの画像を先に読み込んでおく（切り替えたときにちらつかないように） */
-const preloaded = new Set<string>();
-function preload(species: string) {
-  for (const name of ['idle', 'walk_front', 'walk_back', 'walk_left', 'walk_right', 'eat', 'hungry', 'sleep', 'happy', 'surprise']) {
-    const url = assetUrl(`pets/${animOf(species, name).file}`);
-    if (preloaded.has(url)) continue;
-    preloaded.add(url);
-    const img = new Image();
-    img.src = url;
-  }
-}
 
 export interface RoomHandle {
   /** ごはんをもらったペットを餌皿へ向かわせる */
@@ -64,7 +52,7 @@ const Room = forwardRef<RoomHandle, { items: string[]; pets: Pet[]; fresh?: stri
       const a = map.get(p.id);
       if (a) a.pet = p;
       else {
-        preload(p.species);
+        preloadSpecies(p.species);
         map.set(p.id, new PetActor(p, world.nav.nearestFree(SPOTS[i % SPOTS.length]), now));
       }
     });
@@ -96,11 +84,15 @@ const Room = forwardRef<RoomHandle, { items: string[]; pets: Pet[]; fresh?: stri
         const k = size / CELL;
         const def = animOf(a.pet.species, a.anim(now));
         let prev = shown.get(id);
-        if (!prev) shown.set(id, (prev = { file: '', frame: -1, transform: '', z: -1, state: '', duo: '' }));
+        if (!prev) shown.set(id, (prev = { file: '\0', frame: -1, transform: '', z: -1, state: '', duo: '' }));
         if (prev.file !== def.file) {
           prev.file = def.file;
           prev.frame = -1;
-          sprite.style.backgroundImage = `url(${assetUrl(`pets/${def.file}`)})`;
+          // 画像が無いときは仮の表示
+          sprite.classList.toggle('sprite-placeholder', !def.file);
+          sprite.textContent = def.file ? '' : '🐾';
+          sprite.style.fontSize = `${size * 0.4}px`;
+          sprite.style.backgroundImage = def.file ? `url(${assetUrl(`pets/${def.file}`)})` : 'none';
           sprite.style.backgroundSize = `${def.frames * size}px ${size}px`;
         }
         const frame = a.frame(now);

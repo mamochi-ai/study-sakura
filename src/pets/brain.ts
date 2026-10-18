@@ -70,7 +70,8 @@ function perchOf(key: string): Perch | null {
       };
     case 'cat_tower':
       // 低いほうの台の上
-      return { key, top: { x: it.x + it.w * 0.24, y: it.y + it.h * 0.43 }, front: { x: it.x + it.w * 0.24, y: it.groundY + 30 }, stay: [{ state: 'idle', min: 8, max: 14 }] };
+      // 降りる場所は、ボールで遊んでいる子とぶつからないよう右手前
+      return { key, top: { x: it.x + it.w * 0.24, y: it.y + it.h * 0.43 }, front: { x: it.x + it.w * 0.41, y: it.groundY + 94 }, stay: [{ state: 'idle', min: 8, max: 14 }] };
   }
   return null;
 }
@@ -687,6 +688,8 @@ export class PetActor {
         this.pos = world.nav.nearestFree(this.pos);
         break;
     }
-    this.set('idle', now, 1500 + Math.random() * 2500);
+    // ほかの子と重なる場所で止まったら、すぐに離れる（次の think で動く）
+    const crowded = this.others(world).some((o) => o.state !== 'walk' && bodyDist(this.pos, o.pos) < 0.8);
+    this.set('idle', now, crowded ? 0 : 1500 + Math.random() * 2500);
   }
 }

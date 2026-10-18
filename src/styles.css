@@ -810,6 +810,8 @@ h1, h2 { margin: 0; }
 .room-item.tappable { pointer-events: auto; cursor: pointer; }
 .room-pet { position: absolute; left: 0; top: 0; cursor: pointer; will-change: transform; -webkit-tap-highlight-color: transparent; }
 .sprite { background-repeat: no-repeat; flex: none; }
+/* 画像が無いときの仮の表示 */
+.sprite-placeholder { display: grid; place-items: end center; padding-bottom: 6%; line-height: 1; opacity: .7; }
 
 .pet-panel { flex: 0 0 250px; display: flex; flex-direction: column; gap: 12px; overflow-y: auto; }
 .pet-stats { display: grid; gap: 6px; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; font-size: 14px; }
@@ -845,6 +847,10 @@ h1, h2 { margin: 0; }
 
 .mini-pet { position: relative; width: 44px; height: 40px; padding: 0; border: 0; background: transparent; cursor: pointer; display: grid; place-items: center; -webkit-tap-highlight-color: transparent; }
 .mini-pet-empty { font-size: 20px; }
+/* ノート画面では控えめに：ゆっくり呼吸するだけ（描画の負担が小さい transform のみ） */
+.mini-pet .sprite { animation: mini-breathe 3.6s ease-in-out infinite; transform-origin: 50% 90%; }
+@keyframes mini-breathe { 50% { transform: scale(1.03, .97); } }
+@media (prefers-reduced-motion: reduce) { .mini-pet .sprite { animation: none; } }
 .mini-pet-hungry { position: absolute; right: -2px; top: -2px; font-size: 13px; background: var(--surface); border-radius: 99px; line-height: 1; padding: 2px; box-shadow: 0 1px 3px rgba(0,0,0,.2); }
 
 /* 縦向き・狭い画面では情報を部屋の下に */
