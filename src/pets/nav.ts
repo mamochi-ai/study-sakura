@@ -30,6 +30,12 @@ export function footprint(it: RoomItem): Box {
   return { x1: it.x + it.w * 0.06, x2: it.x + it.w * 0.94, y1: it.groundY - depth, y2: it.groundY };
 }
 
+/** ほかのペットの体の大きさ（この楕円の中には入らない） */
+export const BODY_RX = 125;
+export const BODY_RY = 42;
+/** 楕円の中か（1 未満なら重なる） */
+export const bodyDist = (a: Pt, b: Pt) => ((a.x - b.x) / BODY_RX) ** 2 + ((a.y - b.y) / BODY_RY) ** 2;
+
 const GRID = 24;
 const COLS = Math.ceil(ROOM.width / GRID);
 const ROWS = Math.ceil(ROOM.height / GRID);
@@ -38,6 +44,10 @@ const ROWS = Math.ceil(ROOM.height / GRID);
 export class NavMap {
   private blocked: Box[];
   private free: Uint8Array;
+  /** 道順を探す間だけ、よけるほかのペットの位置 */
+  private avoid: Pt[] = [];
+  /** 自分の出発点のまわりは、ほかの子と重なっていても通れるようにする */
+  private origin: Pt | null = null;
 
   constructor(items: string[]) {
     this.blocked = SOLID.filter((k) => items.includes(k) && ROOM.items[k]).map((k) => {
@@ -52,7 +62,15 @@ export class NavMap {
   /** その点に足元を置けるか（床の中で、家具に重ならない） */
   walkable(p: Pt) {
     if (p.y < FLOOR.top || p.y > FLOOR.bottom || p.x < leftEdge(p.y) || p.x > FLOOR.right) return false;
-    return !this.blocked.some((b) => p.x > b.x1 && p.x < b.x2 && p.y > b.y1 && p.y < b.y2);
+    if (this.blocked.some((b) => p.x > b.x1 && p.x < b.x2 && p.y > b.y1 && p.y < b.y2)) return false;
+    return !this.crowded(p);
+  }
+
+  /** ほかのペットに重なるか（道順を探している間だけ） */
+  private crowded(p: Pt) {
+    if (!this.avoid.length) return false;
+    if (this.origin && bodyDist(p, this.origin) < 1) return false;
+    return this.avoid.some((o) => bodyDist(p, o) < 1);
   }
 
   /** a から b までまっすぐ歩けるか */
@@ -87,10 +105,20 @@ export class NavMap {
     return { x: 760, y: 980 };
   }
 
-  /** a から b までの道順（家具をよける）。たどり着けなければ null */
-  path(a: Pt, b: Pt): Pt[] | null {
+  /** a から b までの道順（家具と、avoid に渡したほかのペットをよける）。たどり着けなければ null */
+  path(a: Pt, b: Pt, avoid: Pt[] = []): Pt[] | null {
     const start = this.nearestFree(a);
-    const goal = this.nearestFree(b);
+    this.avoid = avoid;
+    this.origin = start;
+    try {
+      return this.search(start, this.nearestFree(b));
+    } finally {
+      this.avoid = [];
+      this.origin = null;
+    }
+  }
+
+  private search(start: Pt, goal: Pt): Pt[] | null {
     if (this.clear(start, goal)) return [goal];
     const cell = (p: Pt) => Math.min(ROWS - 1, Math.max(0, Math.floor(p.y / GRID))) * COLS + Math.min(COLS - 1, Math.max(0, Math.floor(p.x / GRID)));
     const s = cell(start);
@@ -122,7 +150,7 @@ export class NavMap {
           const ny = cy + dy;
           if (nx < 0 || ny < 0 || nx >= COLS || ny >= ROWS) continue;
           const n = ny * COLS + nx;
-          if (!this.free[n] && n !== g) continue;
+          if ((!this.free[n] || this.crowded(center(n))) && n !== g) continue;
           const t = gScore[cur] + (dx && dy ? Math.SQRT2 : 1);
           if (t < gScore[n]) {
             gScore[n] = t;
