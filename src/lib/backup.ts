@@ -111,6 +111,22 @@ async function readBackup(file: File): Promise<{ payload: Payload; pdfs: Map<str
   return { payload, pdfs };
 }
 
+/** Blob の中身をメモリに読み込んだ、独立したコピー（元のファイルが消えても読める） */
+export async function copyBlob(blob: Blob, type = blob.type || 'application/pdf'): Promise<Blob> {
+  return new Blob([await blob.arrayBuffer()], { type });
+}
+
+/** 保存されている参考書の中身が読めるか */
+export async function readable(blob: Blob | undefined) {
+  if (!blob) return false;
+  try {
+    await blob.slice(0, 1).arrayBuffer();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export interface RestoreResult {
   /** 追加・更新したもの */
   books: number;
@@ -132,17 +148,21 @@ export async function restoreBackup(file: File): Promise<RestoreResult> {
   const list = <T>(v: T[] | undefined) => (Array.isArray(v) ? v : []);
   const r: RestoreResult = { books: 0, binders: 0, notes: 0, kept: 0, missingBooks: 0 };
 
-  await db.transaction('rw', [db.books, db.binders, db.notes, db.bookmarks, db.sessions, db.strokes, db.inkItems, db.reviews, db.pets, db.petWorld], async () => {
-    for (const { data: _data, fileType: _type, ...meta } of list(payload.books)) {
-      if (await db.books.get(meta.id)) continue;
-      const pdf = pdfs.get(meta.id);
-      if (!pdf) {
-        r.missingBooks++;
-        continue;
-      }
-      await db.books.add({ ...meta, file: pdf });
-      r.books++;
+  // 参考書は 1 冊ずつ、中身をアプリの中に写してから保存する。
+  // 選んだファイルの一部を指したまま保存すると、iPad ではそのファイル（一時的な置き場所）が消えたあと読めなくなるため
+  for (const { data: _data, fileType: _type, ...meta } of list(payload.books)) {
+    const cur = await db.books.get(meta.id);
+    if (cur && (await readable(cur.file))) continue;
+    const pdf = pdfs.get(meta.id);
+    if (!pdf) {
+      r.missingBooks++;
+      continue;
     }
+    await db.books.put({ ...meta, file: await copyBlob(pdf) });
+    r.books++;
+  }
+
+  await db.transaction('rw', [db.binders, db.notes, db.bookmarks, db.sessions, db.strokes, db.inkItems, db.reviews, db.pets, db.petWorld], async () => {
     /** 更新日時が新しいほうを残す */
     const newer = async <T extends { id: string; updatedAt: number }>(table: typeof db.binders | typeof db.notes | typeof db.reviews, rows: T[], count?: 'binders' | 'notes') => {
       for (const row of rows) {

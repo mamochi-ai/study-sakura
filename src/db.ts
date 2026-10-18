@@ -200,11 +200,13 @@ export const BINDER_COLORS = ['#e0607e', '#f2a541', '#5aa469', '#4f86c6', '#9b6f
 
 export async function addBook(file: File): Promise<Book> {
   const count = await db.books.count();
+  // 選んだファイルを指したままにせず、中身をアプリの中に写して保存する（iPad で元の一時ファイルが消えても読めるように）
+  const data = new Blob([await file.arrayBuffer()], { type: file.type || 'application/pdf' });
   const book: Book = {
     id: uid(),
     title: file.name.replace(/\.pdf$/i, ''),
     color: BOOK_COLORS[count % BOOK_COLORS.length],
-    file,
+    file: data,
     fileName: file.name,
     size: file.size,
     createdAt: Date.now(),

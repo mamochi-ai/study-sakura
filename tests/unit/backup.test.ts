@@ -1,6 +1,6 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { db, today } from '../../src/db';
-import { createBackup, restoreBackup } from '../../src/lib/backup';
+import { createBackup, readable, restoreBackup } from '../../src/lib/backup';
 
 const pdf = (text: string) => new Blob([`%PDF-1.4 ${text}`], { type: 'application/pdf' });
 
@@ -87,5 +87,22 @@ describe('バックアップ', () => {
     await expect(restoreBackup(new File(['{"format":"study-sakura-backup","version":99}'], 'b.json'))).rejects.toThrow('アプリを更新');
     await expect(restoreBackup(new File(['{"hello":1}'], 'c.json'))).rejects.toThrow('バックアップファイルではありません');
     await expect(restoreBackup(new File(['not json'], 'd.json'))).rejects.toThrow('バックアップファイルではありません');
+  });
+
+  it('中身が読めなくなった参考書は、もう一度復元すると直る', async () => {
+    await seed();
+    const file = await createBackup('full');
+    // 以前の版で復元して、元のファイルが消えた状態をまねる
+    const broken = { slice: () => ({ arrayBuffer: () => Promise.reject(new DOMException('gone', 'NotFoundError')) }) } as unknown as Blob;
+    expect(await readable(broken)).toBe(false);
+    const get = db.books.get.bind(db.books);
+    const spy = vi.spyOn(db.books, 'get').mockImplementation((async (id: string) => {
+      const b = await get(id);
+      return b && { ...b, file: broken };
+    }) as typeof db.books.get);
+    const r = await restoreBackup(file);
+    spy.mockRestore();
+    expect(r.books).toBe(1);
+    expect(await (await db.books.get('b1'))!.file.text()).toBe('%PDF-1.4 one');
   });
 });
