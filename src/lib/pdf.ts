@@ -14,15 +14,29 @@ const cache = new Map<string, Promise<PDFDocumentProxy>>();
 export const BOOK_UNREADABLE = '参考書のデータが読めなくなっています';
 const MAX_OPEN = 2;
 
-async function openBook(bookId: string): Promise<PDFDocumentProxy> {
-  const book = await db.books.get(bookId);
-  if (!book) throw new Error('参考書が見つかりません（削除された可能性があります）');
-  let data: Uint8Array;
-  try {
-    data = new Uint8Array(await book.file.arrayBuffer());
-  } catch {
-    throw new Error(BOOK_UNREADABLE);
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/**
+ * 保存されている参考書の中身を読む。
+ * iPad では、追加した直後の PDF はまだ書き込み中で読めないことがあるので、少し待って読み直す
+ */
+async function readBookData(bookId: string): Promise<{ data: Uint8Array; pageCount?: number }> {
+  for (const wait of [0, 300, 1000, 2000, 4000]) {
+    if (wait) await sleep(wait);
+    const book = await db.books.get(bookId);
+    if (!book) throw new Error('参考書が見つかりません（削除された可能性があります）');
+    try {
+      return { data: new Uint8Array(await book.file.arrayBuffer()), pageCount: book.pageCount };
+    } catch {
+      // 読み直す
+    }
   }
+  throw new Error(BOOK_UNREADABLE);
+}
+
+async function openBook(bookId: string): Promise<PDFDocumentProxy> {
+  const book = await readBookData(bookId);
+  const data = book.data;
   const doc = await pdfjs.getDocument({
     data,
     cMapUrl: `${import.meta.env.BASE_URL}pdfjs/cmaps/`,
