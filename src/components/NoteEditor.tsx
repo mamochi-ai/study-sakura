@@ -8,7 +8,6 @@ import { formatDate } from '../lib/format';
 import { useSettings } from '../lib/settings';
 import { insertPageRef, useStudyBus } from '../views/studyBus';
 import { askText, toast } from './Modal';
-import { useMultiTapUndo } from '../lib/multiTap';
 import { notePaper, PaperPicker } from './PaperPicker';
 import { createReview } from '../db';
 import { MARKERS as MARKER_DEFS } from '../lib/memorize';
@@ -76,13 +75,6 @@ export default function NoteEditor({ note, onSaved }: { note: Note; onSaved?: ()
   });
   const editorRef = useRef<Editor | null>(null);
   editorRef.current = editor;
-
-  // 2 本指タップで元に戻す・3 本指タップでやり直す
-  useMultiTapUndo(
-    scrollRef,
-    () => editorRef.current?.commands.undo(),
-    () => editorRef.current?.commands.redo(),
-  );
 
   const titleRef = useRef(title);
   titleRef.current = title;
