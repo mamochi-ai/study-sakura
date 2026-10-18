@@ -89,7 +89,10 @@ export const PdfPane = forwardRef<PdfPaneHandle, Props>(function PdfPane(
       else if (books.some((b) => b.id === bookId)) {
         pendingPage.current = p;
         onSelectBook(bookId);
-      } else toast('この参考書はバインダーに入っていません');
+      } else
+        db.books.get(bookId).then((b) =>
+          toast(b ? 'この参考書はバインダーに入っていません（バインダーの編集で追加できます）' : 'この参考書は本棚から削除されています'),
+        );
     },
     currentPage: () => pageRef.current,
   }), [doc, goTo, books, onSelectBook]);
@@ -212,7 +215,21 @@ export const PdfPane = forwardRef<PdfPaneHandle, Props>(function PdfPane(
               <button className="btn primary" onClick={onEditBooks}>本棚から参考書を選ぶ</button>
             </div>
           )}
-          {error && <div className="pdf-empty">PDF を開けませんでした：{error}</div>}
+          {error && (
+            <div className="pdf-empty">
+              {/見つかりません/.test(error) ? (
+                '参考書が見つかりません。本棚から削除された可能性があります'
+              ) : (
+                <>
+                  参考書を開けませんでした。
+                  <br />
+                  iPadOS 17.4 より古いと開けないことがあります。設定 → 一般 → ソフトウェアアップデート で更新してください。
+                  <br />
+                  <small className="muted">（{error}）</small>
+                </>
+              )}
+            </div>
+          )}
           {doc && (
             <PdfViewer
               key={doc.bookId}
@@ -379,11 +396,13 @@ function Search({ doc, onGo }: { doc: PDFDocumentProxy; onGo: (p: number) => voi
   const [q, setQ] = useState('');
   const [results, setResults] = useState<{ page: number; snippet: string }[] | null>(null);
   const [busy, setBusy] = useState(false);
+  const [progress, setProgress] = useState<[number, number] | null>(null);
   const run = async () => {
     const query = q.trim().toLowerCase();
     if (!query) return setResults(null);
     setBusy(true);
-    const texts = await getAllText(doc);
+    setProgress(null);
+    const texts = await getAllText(doc, (done, total) => setProgress([done, total]));
     const out: { page: number; snippet: string }[] = [];
     texts.forEach((t, i) => {
       const lower = t.toLowerCase();
@@ -403,7 +422,11 @@ function Search({ doc, onGo }: { doc: PDFDocumentProxy; onGo: (p: number) => voi
       <div className="pad">
         <input className="search-input" autoFocus placeholder="参考書の中を検索（Enter）" value={q} onChange={(e) => setQ(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && !e.nativeEvent.isComposing && run()} />
       </div>
-      {busy && <p className="muted small pad">検索中…（初回は少し時間がかかります）</p>}
+      {busy && (
+        <p className="muted small pad">
+          検索中…{progress ? `（${progress[0]} / ${progress[1]} ページを読み込み中。初回だけ時間がかかります）` : ''}
+        </p>
+      )}
       {results && !busy && <p className="muted small pad">{results.length} 件</p>}
       <ul className="outline">
         {results?.map((r, i) => (

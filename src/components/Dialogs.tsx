@@ -173,7 +173,7 @@ export function BookDialog({ book, onClose, onCreateBinder }: { book: Book; onCl
   const remove = async () => {
     const ok = await confirmDialog({
       title: '参考書を削除',
-      message: `「${book.title}」を本棚から削除します。${usedBy.length ? `\n${usedBy.length} 冊のバインダーからも外れます（ノートは残ります）。` : ''}`,
+      message: `「${book.title}」を本棚から削除します。${usedBy.length ? `\n${usedBy.length} 冊のバインダーからも外れます（ノートは残ります）。` : ''}\nノートの中のこの参考書へのページリンク・引用元は、押しても開けなくなります。`,
       danger: true,
       okLabel: '削除する',
     });

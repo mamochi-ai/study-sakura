@@ -2,33 +2,13 @@
 
 PC は不要です。すべて iPad の Safari で操作できます。
 
-## 1. アプリを公開する（最初の 1 回だけ）
+## 1. アプリの場所
 
-このリポジトリは **非公開（private）** です。無料で公開するには次のどちらかを選びます。
+公開済みです：**https://mamochi-ai.github.io/study-sakura/**
 
-### A. GitHub Pages（リポジトリを公開にする）
-
-ノートや PDF は iPad の中にだけ保存され、GitHub には送られません。公開されるのはアプリのプログラムだけです。
-
-1. Safari で `github.com/mamochi-ai/study-sakura` を開く
-2. **Settings → General** の一番下 **Danger Zone → Change visibility → Public**
-3. **Settings → Pages → Build and deployment → Source** を **GitHub Actions** にする
-4. 作業ブランチを `main` にマージする（Pull request を作って Merge）
-5. **Actions** タブで「Deploy to GitHub Pages」が緑になるまで待つ（2〜3 分）
-6. `https://mamochi-ai.github.io/study-sakura/` を開く
-
-※ 非公開のまま GitHub Pages を使うには GitHub Pro（有料・月 4 ドル程度）が必要です。
-
-### B. Cloudflare Pages（リポジトリは非公開のまま・無料）
-
-1. Safari で `dash.cloudflare.com` にサインアップ（無料）
-2. **Workers & Pages → Create → Pages → Connect to Git** で GitHub と連携し、`study-sakura` を選ぶ
-3. 設定
-   - Production branch：`main`（または作業ブランチ）
-   - Build command：`npm run build`
-   - Build output directory：`dist`
-   - Environment variables：`NODE_VERSION` = `22`
-4. **Save and Deploy**。表示された `https://〜.pages.dev` を開く
+- リポジトリ（`github.com/mamochi-ai/study-sakura`）は公開（public）、GitHub Pages で無料で配信しています
+- `main` にマージすると、**Actions** の「Deploy to GitHub Pages」が動き、2〜3 分で新しい版になります
+- ノートや PDF は iPad の中にだけ保存され、GitHub には送られません。公開されているのはアプリのプログラムと画像だけです
 
 ## 2. ホーム画面に追加する（重要）
 
@@ -40,8 +20,12 @@ PC は不要です。すべて iPad の Safari で操作できます。
 ホーム画面のアプリで使い始めてください。ホーム画面のアプリは、Safari の
 「7 日間使わないとデータを消す」仕組みの対象外になるので、データも消えにくくなります。
 
-それでも端末の故障や容量不足に備えて、**週に 1 回は「⋯ → バックアップを書き出す」** で
-「ファイル」アプリ（iCloud Drive など）に保存してください。
+それでも端末の故障や容量不足に備えて、本棚の「⋯」からバックアップを「ファイル」アプリ（iCloud Drive など）に保存してください。
+
+- **📝 ノートだけ書き出す（軽い）**：ノート・手書き・復習・学習記録・ペット。数 MB なので、こまめに（週 1 回など）
+- **💾 バックアップを書き出す（参考書も）**：参考書の PDF も入る完全版。参考書を追加したときに
+- どちらも「保存する」を押すと共有シートが開くので、「“ファイル”に保存」を選ぶ
+- 復元は「📂 バックアップから復元」。今あるデータは消さず、同じものは新しいほうを残す。ノートだけのバックアップを別の iPad に戻したときは、参考書を本棚に追加し直す
 
 ## 3. アップデート
 

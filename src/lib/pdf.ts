@@ -113,22 +113,31 @@ export async function getOutline(doc: PDFDocumentProxy): Promise<OutlineItem[]> 
 }
 
 const textCache = new WeakMap<PDFDocumentProxy, Promise<string[]>>();
+const textListeners = new WeakMap<PDFDocumentProxy, Set<(done: number, total: number) => void>>();
 
-/** 全ページのテキスト（検索用） */
-export function getAllText(doc: PDFDocumentProxy): Promise<string[]> {
+/** 全ページのテキスト（検索用）。初回は全ページを読むので、進み具合を onProgress で知らせる */
+export function getAllText(doc: PDFDocumentProxy, onProgress?: (done: number, total: number) => void): Promise<string[]> {
+  let listeners = textListeners.get(doc);
+  if (!listeners) textListeners.set(doc, (listeners = new Set()));
+  if (onProgress) listeners.add(onProgress);
   let p = textCache.get(doc);
   if (!p) {
+    const ls = listeners;
     p = (async () => {
       const out: string[] = [];
       for (let i = 1; i <= doc.numPages; i++) {
         const page = await doc.getPage(i);
         const tc = await page.getTextContent();
         out.push(tc.items.map((it) => ('str' in it ? it.str + (it.hasEOL ? '\n' : '') : '')).join(''));
+        page.cleanup();
+        if (i % 5 === 0 || i === doc.numPages) ls.forEach((f) => f(i, doc.numPages));
       }
       return out;
     })();
+    p.catch(() => textCache.delete(doc));
     textCache.set(doc, p);
   }
+  if (onProgress) p.finally(() => listeners!.delete(onProgress)).catch(() => {});
   return p;
 }
 
