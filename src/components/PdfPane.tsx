@@ -1,7 +1,7 @@
 import { useLiveQuery } from 'dexie-react-hooks';
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import { db, uid, type Book, type ReadingPosition } from '../db';
-import { getAllText, getOutline, loadBookPdf, type OutlineItem, type PDFDocumentProxy } from '../lib/pdf';
+import { BOOK_UNREADABLE, getAllText, getOutline, loadBookPdf, type OutlineItem, type PDFDocumentProxy } from '../lib/pdf';
 import { insertFromPdf, insertPageRef, useStudyBus } from '../views/studyBus';
 import { askText, toast } from './Modal';
 import { PdfViewer, type PdfViewerHandle } from './PdfViewer';
@@ -219,6 +219,12 @@ export const PdfPane = forwardRef<PdfPaneHandle, Props>(function PdfPane(
             <div className="pdf-empty">
               {/見つかりません/.test(error) ? (
                 '参考書が見つかりません。本棚から削除された可能性があります'
+              ) : error === BOOK_UNREADABLE ? (
+                <>
+                  {BOOK_UNREADABLE}。
+                  <br />
+                  本棚の「⋯ → 📂 バックアップから復元」で同じバックアップをもう一度選ぶか、同じ PDF を本棚に追加し直してください。
+                </>
               ) : (
                 <>
                   参考書を開けませんでした。

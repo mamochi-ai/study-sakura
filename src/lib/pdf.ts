@@ -10,12 +10,19 @@ export type { PDFDocumentProxy };
 
 /** 開いている参考書（最近使った順）。メモリを使いすぎないよう、同時に持つのは MAX_OPEN 冊まで */
 const cache = new Map<string, Promise<PDFDocumentProxy>>();
+/** 保存されている参考書の中身が読めなくなっているとき（以前の版で復元した参考書など） */
+export const BOOK_UNREADABLE = '参考書のデータが読めなくなっています';
 const MAX_OPEN = 2;
 
 async function openBook(bookId: string): Promise<PDFDocumentProxy> {
   const book = await db.books.get(bookId);
   if (!book) throw new Error('参考書が見つかりません（削除された可能性があります）');
-  const data = new Uint8Array(await book.file.arrayBuffer());
+  let data: Uint8Array;
+  try {
+    data = new Uint8Array(await book.file.arrayBuffer());
+  } catch {
+    throw new Error(BOOK_UNREADABLE);
+  }
   const doc = await pdfjs.getDocument({
     data,
     cMapUrl: `${import.meta.env.BASE_URL}pdfjs/cmaps/`,

@@ -59,6 +59,8 @@ test('ノートのタブはドラッグで並べ替えられ、再読み込み�
     await page.getByText(kind).click();
   }
   const titles = async () => (await page.locator('.note-tab').allTextContents()).map((t) => t.replace(/^[📝✏️]+/u, '').trim());
+  // 新しいタブが 3 つとも並んでから、最初の順番を記録する
+  await expect(page.locator('.note-tab')).toHaveCount(3);
   const before = await titles();
   const first = (await page.locator('.note-tab').nth(0).boundingBox())!;
   const last = (await page.locator('.note-tab').nth(2).boundingBox())!;
