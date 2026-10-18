@@ -796,7 +796,9 @@ h1, h2 { margin: 0; }
 .pet-title { font-size: 17px; }
 .pet-body { flex: 1; min-height: 0; display: flex; gap: 12px; padding: 12px calc(12px + env(safe-area-inset-right)) calc(12px + env(safe-area-inset-bottom)) calc(12px + env(safe-area-inset-left)); }
 .room-wrap { flex: 1; min-width: 0; position: relative; display: flex; }
-.room-box { flex: 1; min-width: 0; position: relative; overflow: hidden; border-radius: 14px; display: grid; place-items: center; }
+.room-box { flex: 1; min-width: 0; position: relative; overflow: hidden; border-radius: 14px; display: grid; place-items: center; touch-action: none; }
+.room-zoom { position: absolute; right: 10px; bottom: 10px; z-index: 2; display: flex; gap: 4px; padding: 4px; border-radius: 12px; background: color-mix(in srgb, var(--surface) 85%, transparent); box-shadow: 0 2px 8px rgba(0,0,0,.15); }
+.room-zoom .icon-btn { width: 40px; height: 40px; font-size: 20px; }
 /* 1536×1024 の部屋を、中央を基準に縮小して箱に収める */
 .room { position: absolute; left: 50%; top: 50%; translate: -50% -50%; transform-origin: center; border-radius: 18px; overflow: hidden; box-shadow: 0 6px 24px rgba(0,0,0,.18); }
 .room-bg { position: absolute; inset: 0; width: 100%; height: 100%; }

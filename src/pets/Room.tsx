@@ -1,4 +1,4 @@
-import { forwardRef, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { Pet } from '../db';
 import { PetActor, type World } from './brain';
 import { NavMap, type Pt } from './nav';
@@ -13,6 +13,9 @@ const SPOTS: Pt[] = [
   { x: 380, y: 960 },
   { x: 1350, y: 975 },
 ];
+
+/** 部屋の拡大の上限（画面に収まる大きさの何倍まで） */
+const MAX_ZOOM = 3;
 
 const sizeOf = (species: string) => Math.round(CELL * speciesOf(species).scale * 1.1);
 
@@ -132,9 +135,116 @@ const Room = forwardRef<RoomHandle, { items: string[]; pets: Pet[]; fresh?: stri
 
   const furniture = Object.entries(ROOM.items).filter(([key]) => items.includes(key));
 
+  // ---------- 拡大・移動（2 本指でピンチ、拡大中は 1 本指でずらす） ----------
+  const [view, setView] = useState({ zoom: 1, x: 0, y: 0 });
+  const viewRef = useRef(view);
+  viewRef.current = view;
+  /** 拡大した部屋がはみ出さない範囲にずらす量をおさえる */
+  const clampView = useCallback(
+    (v: { zoom: number; x: number; y: number }) => {
+      const box = boxRef.current;
+      if (!box) return v;
+      const zoom = Math.min(MAX_ZOOM, Math.max(1, v.zoom));
+      const mx = Math.max(0, (ROOM.width * scale * zoom - box.clientWidth) / 2);
+      const my = Math.max(0, (ROOM.height * scale * zoom - box.clientHeight) / 2);
+      return { zoom, x: Math.min(mx, Math.max(-mx, v.x)), y: Math.min(my, Math.max(-my, v.y)) };
+    },
+    [scale],
+  );
+  const pointers = useRef(new Map<number, { x: number; y: number }>());
+  const gesture = useRef<{ zoom: number; x: number; y: number; mid: { x: number; y: number }; dist: number; moved: boolean } | null>(null);
+  /** ずらしたあとの指を離したときに、ペットや餌皿のタップにならないように */
+  const dragged = useRef(false);
+
+  const center = () => {
+    const r = boxRef.current!.getBoundingClientRect();
+    return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+  };
+  const startGesture = () => {
+    const pts = [...pointers.current.values()];
+    const mid = pts.length > 1 ? { x: (pts[0].x + pts[1].x) / 2, y: (pts[0].y + pts[1].y) / 2 } : pts[0];
+    const dist = pts.length > 1 ? Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y) : 0;
+    gesture.current = { ...viewRef.current, mid, dist, moved: gesture.current?.moved ?? false };
+  };
+  const zoomAt = (zoom: number, at: { x: number; y: number }, from = viewRef.current) => {
+    // 指の下の場所が動かないように拡大する
+    const c = center();
+    const k = Math.min(MAX_ZOOM, Math.max(1, zoom)) / from.zoom;
+    setView(clampView({ zoom: from.zoom * k, x: at.x - c.x - (at.x - c.x - from.x) * k, y: at.y - c.y - (at.y - c.y - from.y) * k }));
+  };
+
+  const onPointerDown = (e: React.PointerEvent) => {
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    startGesture();
+  };
+  const onPointerMove = (e: React.PointerEvent) => {
+    if (!pointers.current.has(e.pointerId)) return;
+    pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    const g = gesture.current;
+    if (!g) return;
+    const pts = [...pointers.current.values()];
+    if (pts.length > 1) {
+      const mid = { x: (pts[0].x + pts[1].x) / 2, y: (pts[0].y + pts[1].y) / 2 };
+      const dist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
+      g.moved = dragged.current = true;
+      const c = center();
+      const zoom = Math.min(MAX_ZOOM, Math.max(1, (g.zoom * dist) / Math.max(1, g.dist)));
+      const k = zoom / g.zoom;
+      // 2 本指の真ん中が指についてくるように
+      setView(clampView({ zoom, x: mid.x - c.x - (g.mid.x - c.x - g.x) * k, y: mid.y - c.y - (g.mid.y - c.y - g.y) * k }));
+      return;
+    }
+    const dx = pts[0].x - g.mid.x;
+    const dy = pts[0].y - g.mid.y;
+    if (!g.moved && Math.hypot(dx, dy) < 8) return;
+    if (g.zoom <= 1.01) return;
+    g.moved = dragged.current = true;
+    setView(clampView({ zoom: g.zoom, x: g.x + dx, y: g.y + dy }));
+  };
+  const onPointerUp = (e: React.PointerEvent) => {
+    pointers.current.delete(e.pointerId);
+    if (pointers.current.size) startGesture();
+    else gesture.current = null;
+  };
+  // パソコン：トラックパッドのピンチ（ctrl + ホイール）
+  const onWheel = (e: React.WheelEvent) => {
+    if (!e.ctrlKey) return;
+    e.preventDefault();
+    zoomAt(viewRef.current.zoom * Math.exp(-e.deltaY / 200), { x: e.clientX, y: e.clientY });
+  };
+  useEffect(() => setView((v) => clampView(v)), [clampView]);
+
   return (
-    <div ref={boxRef} className="room-box">
-      <div className="room" style={{ width: ROOM.width, height: ROOM.height, transform: `scale(${scale})`, visibility: scale ? 'visible' : 'hidden' }}>
+    <div
+      ref={boxRef}
+      className="room-box"
+      onPointerDownCapture={() => {
+        // 新しく触れたら、前のずらしの印は消す（ボタンやペットのタップを受け付ける）
+        if (!pointers.current.size) dragged.current = false;
+      }}
+      onPointerDown={onPointerDown}
+      onPointerMove={onPointerMove}
+      onPointerUp={onPointerUp}
+      onPointerCancel={onPointerUp}
+      onWheel={onWheel}
+      onClickCapture={(e) => {
+        if (dragged.current) {
+          e.stopPropagation();
+          e.preventDefault();
+          dragged.current = false;
+        }
+      }}
+    >
+      <div
+        className="room"
+        style={{
+          width: ROOM.width,
+          height: ROOM.height,
+          transform: `translate(${view.x}px, ${view.y}px) scale(${scale * view.zoom})`,
+          visibility: scale ? 'visible' : 'hidden',
+        }}
+      >
         <img className="room-bg" src={assetUrl(`room/${ROOM.background}`)} alt="" draggable={false} />
         {furniture.map(([key, it]) => (
           <img
@@ -167,6 +277,13 @@ const Room = forwardRef<RoomHandle, { items: string[]; pets: Pet[]; fresh?: stri
             </div>
           );
         })}
+      </div>
+      <div className="room-zoom" onPointerDown={(e) => e.stopPropagation()}>
+        <button className="icon-btn" aria-label="拡大" onClick={() => zoomAt(viewRef.current.zoom * 1.4, center())}>＋</button>
+        <button className="icon-btn" aria-label="縮小" disabled={view.zoom <= 1.01} onClick={() => zoomAt(viewRef.current.zoom / 1.4, center())}>−</button>
+        {view.zoom > 1.01 && (
+          <button className="icon-btn" aria-label="全体を表示" onClick={() => setView({ zoom: 1, x: 0, y: 0 })}>⤢</button>
+        )}
       </div>
     </div>
   );
