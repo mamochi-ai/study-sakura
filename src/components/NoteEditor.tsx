@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { db, type Note } from '../db';
 import { editMathLatex, buildExtensions, insertImageFiles } from '../editor/extensions';
 import { editorHooks, SlashMenu } from '../editor/slash';
-import { downloadBlob } from '../lib/backup';
+import { safeFileName, saveFile } from '../lib/save';
 import { formatDate } from '../lib/format';
 import { useSettings } from '../lib/settings';
 import { insertPageRef, useStudyBus } from '../views/studyBus';
@@ -169,7 +169,7 @@ export default function NoteEditor({ note, onSaved }: { note: Note; onSaved?: ()
 img{max-width:100%}blockquote{border-left:4px solid #ddd;margin:0;padding-left:12px;color:#555}table{border-collapse:collapse}td,th{border:1px solid #ccc;padding:4px 8px}
 mark{padding:0 2px}.page-ref{background:#eef3ff;border-radius:4px;padding:0 4px;font-size:.9em}</style></head>
 <body><h1>${escapeHtml(title)}</h1>${editor.getHTML()}</body></html>`;
-    downloadBlob(new Blob([html], { type: 'text/html' }), `${title || 'note'}.html`);
+    saveFile(new File([html], `${safeFileName(title)}.html`, { type: 'text/html' }));
   };
 
   return (

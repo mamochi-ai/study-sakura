@@ -1,11 +1,52 @@
 import { useLiveQuery } from 'dexie-react-hooks';
 import { useRef, useState } from 'react';
 import { BinderDialog, BookDialog, pickAndAddBooks, SettingsDialog } from '../components/Dialogs';
-import { toast } from '../components/Modal';
+import { confirmDialog, toast } from '../components/Modal';
 import { BinderSpine, BookCover, BookSpine } from '../components/Shelf';
 import { db, today, type Binder } from '../db';
-import { exportBackup, importBackup } from '../lib/backup';
-import { formatDuration } from '../lib/format';
+import { createBackup, restoreBackup, type BackupKind } from '../lib/backup';
+import { saveFile } from '../lib/save';
+import { formatDuration, formatSize } from '../lib/format';
+
+/** バックアップを作って保存する（参考書を含む完全版／ノートだけ） */
+async function backup(kind: BackupKind) {
+  toast(kind === 'full' ? 'バックアップを作っています…（参考書が多いと少しかかります）' : 'バックアップを作っています…');
+  let file: File;
+  try {
+    file = await createBackup(kind);
+  } catch (e) {
+    toast(`バックアップを作れませんでした：${(e as Error).message}`);
+    return;
+  }
+  // 共有シートはタップの直後でないと開けないので、もう一度押してもらう
+  const ok = await confirmDialog({
+    title: 'バックアップの準備ができました',
+    message: `${file.name}（${formatSize(file.size)}）\n「保存する」を押して、“ファイル”アプリ（iCloud Drive など）に保存してください。`,
+    okLabel: '保存する',
+  });
+  if (!ok) return;
+  const r = await saveFile(file);
+  if (r !== 'cancelled') toast('バックアップを保存しました');
+}
+
+async function restore(file: File) {
+  const ok = await confirmDialog({
+    title: 'バックアップから復元',
+    message: '今あるデータは消さずに、バックアップの内容を合わせます。\n同じノートや記録があるときは、新しいほうを残します。',
+    okLabel: '復元する',
+  });
+  if (!ok) return;
+  try {
+    const r = await restoreBackup(file);
+    const parts = [`参考書 ${r.books}`, `バインダー ${r.binders}`, `ノート ${r.notes}`];
+    let msg = `復元しました（${parts.join('・')}）`;
+    if (r.kept) msg += `。今のほうが新しい ${r.kept} 件はそのまま残しました`;
+    if (r.missingBooks) msg += `。参考書 ${r.missingBooks} 冊は PDF が入っていないため、本棚に追加し直してください`;
+    toast(msg);
+  } catch (err) {
+    toast(`復元できませんでした：${(err as Error).message}`);
+  }
+}
 
 export default function DeskView({ onOpenBinder, onOpenPets }: { onOpenBinder: (id: string) => void; onOpenPets: () => void }) {
   const books = useLiveQuery(() => db.books.orderBy('createdAt').toArray(), []);
@@ -50,7 +91,8 @@ export default function DeskView({ onOpenBinder, onOpenPets }: { onOpenBinder: (
           <details className="menu">
             <summary className="btn icon" aria-label="メニュー">⋯</summary>
             <div className="menu-list">
-              <button onClick={() => exportBackup().then(() => toast('バックアップを書き出しました'))}>💾 バックアップを書き出す</button>
+              <button onClick={() => backup('full')}>💾 バックアップを書き出す（参考書も）</button>
+              <button onClick={() => backup('notes')}>📝 ノートだけ書き出す（軽い）</button>
               <button onClick={() => importRef.current?.click()}>📂 バックアップから復元</button>
               <button onClick={() => setSettingsOpen(true)}>⚙ 設定</button>
             </div>
@@ -60,18 +102,12 @@ export default function DeskView({ onOpenBinder, onOpenPets }: { onOpenBinder: (
         <input
           ref={importRef}
           type="file"
-          accept="application/json,.json"
+          accept="application/zip,.zip,application/json,.json"
           hidden
-          onChange={async (e) => {
+          onChange={(e) => {
             const f = e.target.files?.[0];
             e.target.value = '';
-            if (!f) return;
-            try {
-              const r = await importBackup(f);
-              toast(`復元しました（参考書 ${r.books}・バインダー ${r.binders}・ノート ${r.notes}）`);
-            } catch (err) {
-              toast(`復元できませんでした：${(err as Error).message}`);
-            }
+            if (f) restore(f);
           }}
         />
       </header>
