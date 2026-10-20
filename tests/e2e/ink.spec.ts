@@ -128,3 +128,41 @@ test('ペットの部屋から戻ったとき、ノートは前に見ていた�
   await page.locator('.note-tab').first().click();
   await expect.poll(() => page.locator('.note-scroll').first().evaluate((el) => el.scrollTop)).toBe(600);
 });
+
+test('手書き：手のひらが軽く触れてすぐペンが来たら、指のタップとして扱わない', async ({ page }) => {
+  await openDesk(page);
+  await createBinder(page);
+  await page.locator('.note-tabs-bar summary[title="新しいノート"]').click();
+  await page.getByText('✏️ 手書きノート').click();
+  const paper = page.locator('.ink-paper');
+  await expect(paper).toBeVisible();
+  await page.locator('button[title^="復習マーク"]').click();
+
+  const tap = (withPen: boolean) =>
+    paper.evaluate(async (el, withPen) => {
+      const r = el.getBoundingClientRect();
+      const t = new Touch({ identifier: 1, target: el, clientX: r.left + 300, clientY: r.top + 300 });
+      const fire = (type: string, touches: Touch[]) =>
+        el.dispatchEvent(new TouchEvent(type, { touches, targetTouches: touches, changedTouches: [t], bubbles: true, cancelable: true }));
+      fire('touchstart', [t]);
+      await new Promise((res) => setTimeout(res, 60));
+      fire('touchend', []);
+      if (!withPen) return;
+      // 手のひらが離れた直後にペンで書き始める
+      await new Promise((res) => setTimeout(res, 80));
+      const pen = (type: string, x: number) =>
+        el.dispatchEvent(new PointerEvent(type, { pointerId: 7, pointerType: 'pen', isPrimary: true, clientX: r.left + x, clientY: r.top + 120, pressure: 0.5, bubbles: true, cancelable: true }));
+      pen('pointerdown', 100);
+      pen('pointermove', 200);
+      pen('pointerup', 200);
+    }, withPen);
+
+  await tap(true);
+  await page.waitForTimeout(600);
+  await expect(page.locator('.modal')).toHaveCount(0);
+
+  // ペンから少し経ってからの指のタップは、今までどおり効く
+  await page.waitForTimeout(1500);
+  await tap(false);
+  await expect(page.locator('.modal')).toBeVisible();
+});

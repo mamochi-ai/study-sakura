@@ -22,6 +22,8 @@ const MAX_TILE_PX = 5_000_000;
 const ERASER_R = 10;
 /** 指で触れてから動いた距離がこれ以下なら「タップ」とみなす（px） */
 const TAP_SLOP = 8;
+/** 指のタップを実行するまで待つ時間（この間にペンが触れたら、手のひらとして取り消す） */
+const PALM_WAIT = 250;
 
 type Tool = 'pen' | 'marker' | 'eraser' | 'select' | 'flag';
 type EraserMode = 'stroke' | 'partial';
@@ -636,6 +638,13 @@ export default function InkEditor({ note }: { note: Note }) {
     let penDown = false;
     let lastPen = 0;
     let blocked = false; // 指をすべて離すまでスクロールしない
+    let fingers = 0; // いま触れている指（手のひら）の数
+    /** 指のタップは少し待ってから実行する（その間にペンが来たら、手のひらが触れただけとして取り消す） */
+    let pendingTap = 0;
+    const cancelTap = () => {
+      clearTimeout(pendingTap);
+      pendingTap = 0;
+    };
 
     const onDown = (e: PointerEvent) => {
       const tool = prefsRef.current.tool;
@@ -651,6 +660,7 @@ export default function InkEditor({ note }: { note: Note }) {
         penDown = true;
         lastPen = performance.now();
         cancelPan();
+        cancelTap();
       }
       if (live.current) finishStroke();
       if (erasing.current) endErase();
@@ -840,7 +850,8 @@ export default function InkEditor({ note }: { note: Note }) {
         scroller!.scrollTop = g.top;
       }
       g = null;
-      blocked = true;
+      // 触れている指があれば、離すまで止める（ペンだけなら、次の指はすぐ使える）
+      if (fingers > 0) blocked = true;
     }
 
     const onTouchStart = (e: TouchEvent) => {
@@ -848,6 +859,7 @@ export default function InkEditor({ note }: { note: Note }) {
       const target = e.target as HTMLElement;
       if (!paper.contains(target) && target.closest('button, a, input, [role="button"]')) return;
       e.preventDefault(); // スクリブル（手書き文字の自動変換）や長押しメニューも防ぐ
+      fingers = e.touches.length;
       stopMomentum();
       // ペンで書いている間・書いた直後は、指（＝ペンを持つ手の手のひら）では何もしない
       if (isStylus(e) || claimedByPointer || penDown || performance.now() - lastPen < 500) {
@@ -882,7 +894,8 @@ export default function InkEditor({ note }: { note: Note }) {
     };
 
     const onTouchEnd = (e: TouchEvent) => {
-      if (e.touches.length === 0) blocked = false;
+      fingers = e.touches.length;
+      if (fingers === 0) blocked = false;
       const p = g;
       if (!p) return;
       if (e.touches.length > 0) {
@@ -897,7 +910,14 @@ export default function InkEditor({ note }: { note: Note }) {
       g = null;
       const ch = e.changedTouches[0];
       if (!p.moved && !p.multi && performance.now() - p.t0 < 500) {
-        onTap(ch.clientX, ch.clientY);
+        // 書いた直後の指は手のひら。書く前に手を置いたときも、すぐペンが来れば手のひら
+        if (performance.now() - lastPen < 1500) return;
+        const { clientX, clientY } = ch;
+        cancelTap();
+        pendingTap = window.setTimeout(() => {
+          pendingTap = 0;
+          onTap(clientX, clientY);
+        }, PALM_WAIT);
         return;
       }
       // 指を離したあとも少し滑らせる（慣性スクロール）
@@ -932,6 +952,7 @@ export default function InkEditor({ note }: { note: Note }) {
     scroller.addEventListener('touchcancel', onTouchEnd);
     return () => {
       stopMomentum();
+      cancelTap();
       paper.removeEventListener('pointerdown', onDown);
       paper.removeEventListener('pointermove', onMove);
       paper.removeEventListener('pointerup', onUp);
