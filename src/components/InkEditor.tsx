@@ -2,6 +2,7 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createReview, db, REVIEW_STATUS, uid, type InkItem, type Note, type Stroke } from '../db';
 import { saveErrorText } from '../lib/errors';
+import { useScrollMemory } from '../lib/scrollMemory';
 import { formatDate } from '../lib/format';
 import { markerByInkColor, MARKERS, RED_PENS } from '../lib/memorize';
 import { getSettings, useSettings } from '../lib/settings';
@@ -21,6 +22,8 @@ const MAX_TILE_PX = 5_000_000;
 const ERASER_R = 10;
 /** 指で触れてから動いた距離がこれ以下なら「タップ」とみなす（px） */
 const TAP_SLOP = 8;
+/** 指のタップを実行するまで待つ時間（この間にペンが触れたら、手のひらとして取り消す） */
+const PALM_WAIT = 250;
 
 type Tool = 'pen' | 'marker' | 'eraser' | 'select' | 'flag';
 type EraserMode = 'stroke' | 'partial';
@@ -190,6 +193,8 @@ export default function InkEditor({ note }: { note: Note }) {
   const reviews = useLiveQuery(() => db.reviews.where('noteId').equals(note.id).toArray(), [note.id]) ?? [];
 
   const scrollRef = useRef<HTMLDivElement>(null);
+  // ペットの部屋から戻ったときなどに、前に見ていた位置へ戻す（筆跡を読み込んで高さが決まってから）
+  useScrollMemory(scrollRef, `ink:${note.id}`, loaded);
   const paperRef = useRef<HTMLDivElement>(null);
   const tilesRef = useRef<HTMLDivElement>(null);
   const strokes = useRef<Stroke[]>([]);
@@ -633,6 +638,13 @@ export default function InkEditor({ note }: { note: Note }) {
     let penDown = false;
     let lastPen = 0;
     let blocked = false; // 指をすべて離すまでスクロールしない
+    let fingers = 0; // いま触れている指（手のひら）の数
+    /** 指のタップは少し待ってから実行する（その間にペンが来たら、手のひらが触れただけとして取り消す） */
+    let pendingTap = 0;
+    const cancelTap = () => {
+      clearTimeout(pendingTap);
+      pendingTap = 0;
+    };
 
     const onDown = (e: PointerEvent) => {
       const tool = prefsRef.current.tool;
@@ -648,6 +660,7 @@ export default function InkEditor({ note }: { note: Note }) {
         penDown = true;
         lastPen = performance.now();
         cancelPan();
+        cancelTap();
       }
       if (live.current) finishStroke();
       if (erasing.current) endErase();
@@ -837,11 +850,16 @@ export default function InkEditor({ note }: { note: Note }) {
         scroller!.scrollTop = g.top;
       }
       g = null;
-      blocked = true;
+      // 触れている指があれば、離すまで止める（ペンだけなら、次の指はすぐ使える）
+      if (fingers > 0) blocked = true;
     }
 
     const onTouchStart = (e: TouchEvent) => {
+      // 用紙の外のボタン（タイトルなど）は、ふつうに押せるようにする
+      const target = e.target as HTMLElement;
+      if (!paper.contains(target) && target.closest('button, a, input, [role="button"]')) return;
       e.preventDefault(); // スクリブル（手書き文字の自動変換）や長押しメニューも防ぐ
+      fingers = e.touches.length;
       stopMomentum();
       // ペンで書いている間・書いた直後は、指（＝ペンを持つ手の手のひら）では何もしない
       if (isStylus(e) || claimedByPointer || penDown || performance.now() - lastPen < 500) {
@@ -876,7 +894,8 @@ export default function InkEditor({ note }: { note: Note }) {
     };
 
     const onTouchEnd = (e: TouchEvent) => {
-      if (e.touches.length === 0) blocked = false;
+      fingers = e.touches.length;
+      if (fingers === 0) blocked = false;
       const p = g;
       if (!p) return;
       if (e.touches.length > 0) {
@@ -891,7 +910,14 @@ export default function InkEditor({ note }: { note: Note }) {
       g = null;
       const ch = e.changedTouches[0];
       if (!p.moved && !p.multi && performance.now() - p.t0 < 500) {
-        onTap(ch.clientX, ch.clientY);
+        // 書いた直後の指は手のひら。書く前に手を置いたときも、すぐペンが来れば手のひら
+        if (performance.now() - lastPen < 1500) return;
+        const { clientX, clientY } = ch;
+        cancelTap();
+        pendingTap = window.setTimeout(() => {
+          pendingTap = 0;
+          onTap(clientX, clientY);
+        }, PALM_WAIT);
         return;
       }
       // 指を離したあとも少し滑らせる（慣性スクロール）
@@ -918,24 +944,30 @@ export default function InkEditor({ note }: { note: Note }) {
     paper.addEventListener('pointerup', onUp);
     paper.addEventListener('pointercancel', onUp);
     paper.addEventListener('lostpointercapture', onUp);
-    paper.addEventListener('touchstart', onTouchStart, { passive: false });
-    paper.addEventListener('touchmove', onTouchMove, { passive: false });
-    paper.addEventListener('touchend', onTouchEnd);
-    paper.addEventListener('touchcancel', onTouchEnd);
+    // 指（手のひら）は用紙のまわりの余白に置かれることも多いので、スクロールする枠全体で受ける。
+    // 余白で iPad の標準スクロールが始まると、書いている途中のペンが取り消されて線が書けなくなる
+    scroller.addEventListener('touchstart', onTouchStart, { passive: false });
+    scroller.addEventListener('touchmove', onTouchMove, { passive: false });
+    scroller.addEventListener('touchend', onTouchEnd);
+    scroller.addEventListener('touchcancel', onTouchEnd);
     return () => {
       stopMomentum();
+      cancelTap();
       paper.removeEventListener('pointerdown', onDown);
       paper.removeEventListener('pointermove', onMove);
       paper.removeEventListener('pointerup', onUp);
       paper.removeEventListener('pointercancel', onUp);
       paper.removeEventListener('lostpointercapture', onUp);
-      paper.removeEventListener('touchstart', onTouchStart);
-      paper.removeEventListener('touchmove', onTouchMove);
-      paper.removeEventListener('touchend', onTouchEnd);
-      paper.removeEventListener('touchcancel', onTouchEnd);
+      scroller.removeEventListener('touchstart', onTouchStart);
+      scroller.removeEventListener('touchmove', onTouchMove);
+      scroller.removeEventListener('touchend', onTouchEnd);
+      scroller.removeEventListener('touchcancel', onTouchEnd);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [note.id, loaded]);
+
+  /** 色や太さを選んだら、すぐ書けるようにメニューを閉じる */
+  const closeMenu = (e: React.MouseEvent) => (e.currentTarget as HTMLElement).closest('details')?.removeAttribute('open');
 
   const deleteItem = (id: string) => {
     const it = itemsRef.current.find((i) => i.id === id);
@@ -1020,13 +1052,19 @@ export default function InkEditor({ note }: { note: Note }) {
             <div className="menu-caption">{prefs.tool === 'marker' ? 'マーカーの色' : 'ペンの色'}</div>
             <div className="swatches">
               {colors.map((c) => (
-                <button key={c} className={`ink-color${c === curColor ? ' active' : ''}`} style={{ background: c }} onClick={() => set(prefs.tool === 'marker' ? { markerColor: c } : { penColor: c })} aria-label={`色 ${c}`} />
+                <button key={c} className={`ink-color${c === curColor ? ' active' : ''}`} style={{ background: c }} onClick={(e) => {
+                    set(prefs.tool === 'marker' ? { markerColor: c } : { penColor: c });
+                    closeMenu(e);
+                  }} aria-label={`色 ${c}`} />
               ))}
             </div>
             <div className="menu-caption">太さ</div>
             <div className="swatches">
               {widths.map((w) => (
-                <button key={w} className={`ink-width${w === curWidth ? ' active' : ''}`} onClick={() => set(prefs.tool === 'marker' ? { markerWidth: w } : { penWidth: w })} aria-label={`太さ ${w}`}>
+                <button key={w} className={`ink-width${w === curWidth ? ' active' : ''}`} onClick={(e) => {
+                  set(prefs.tool === 'marker' ? { markerWidth: w } : { penWidth: w });
+                  closeMenu(e);
+                }} aria-label={`太さ ${w}`}>
                   <span style={{ width: Math.max(4, w * (prefs.tool === 'marker' ? 0.7 : 2)), height: Math.max(4, w * (prefs.tool === 'marker' ? 0.7 : 2)), background: curColor }} />
                 </button>
               ))}
