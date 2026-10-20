@@ -11,7 +11,7 @@ export const PAPERS: { value: Paper; label: string; icon: string }[] = [
 export const notePaper = (note: Note): Paper => note.paper ?? getSettings().defaultPaper;
 
 /** ノートの用紙（罫線）を選ぶメニュー */
-export function PaperPicker({ note }: { note: Note }) {
+export function PaperPicker({ note, children }: { note: Note; children?: React.ReactNode }) {
   const current = notePaper(note);
   return (
     <details className="menu">
@@ -23,6 +23,7 @@ export function PaperPicker({ note }: { note: Note }) {
             {p.icon} {p.label}
           </button>
         ))}
+        {children}
       </div>
     </details>
   );

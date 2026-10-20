@@ -24,6 +24,9 @@ const ERASER_R = 10;
 const TAP_SLOP = 8;
 /** 指のタップを実行するまで待つ時間（この間にペンが触れたら、手のひらとして取り消す） */
 const PALM_WAIT = 250;
+/** タッチの信号で書いている線の番号（ペンの信号の番号と重ならないように負の数） */
+const TOUCH_ID = -1000;
+const DEBUG_KEY = 'study-sakura:ink-debug';
 
 type Tool = 'pen' | 'marker' | 'eraser' | 'select' | 'flag';
 type EraserMode = 'stroke' | 'partial';
@@ -188,6 +191,32 @@ export default function InkEditor({ note }: { note: Note }) {
   const [items, setItems] = useState<InkItem[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [memorize, setMemorize] = useState(false);
+  /** 書けないときの調査用：ペン・指の信号を画面に表示する */
+  const [debug, setDebug] = useState(() => {
+    try {
+      return localStorage.getItem(DEBUG_KEY) === '1';
+    } catch {
+      return false;
+    }
+  });
+  const debugRef = useRef<HTMLPreElement>(null);
+  const logLines = useRef<string[]>([]);
+  const log = (msg: string) => {
+    const el = debugRef.current;
+    if (!el) return;
+    const d = new Date();
+    logLines.current.push(`${String(d.getSeconds()).padStart(2, '0')}.${String(d.getMilliseconds()).padStart(3, '0')} ${msg}`);
+    if (logLines.current.length > 24) logLines.current.shift();
+    el.textContent = logLines.current.join('\n');
+  };
+  const toggleDebug = () => {
+    setDebug(!debug);
+    try {
+      localStorage.setItem(DEBUG_KEY, debug ? '0' : '1');
+    } catch {
+      // 保存できなくても切り替えはできる
+    }
+  };
   const [, setHistoryTick] = useState(0);
 
   const reviews = useLiveQuery(() => db.reviews.where('noteId').equals(note.id).toArray(), [note.id]) ?? [];
@@ -652,6 +681,7 @@ export default function InkEditor({ note }: { note: Note }) {
       const itemEl = target.closest<HTMLElement>('[data-item-id]');
       // 選択ツールでは、指でも画像などを動かせる
       const selectTouch = e.pointerType === 'touch' && tool === 'select' && (itemEl || target.closest('[data-handle], [data-delete]'));
+      log(`↓ ${e.pointerType} #${e.pointerId}`);
       if (!drawsWith(e) && !selectTouch) return;
       if (e.pointerType === 'mouse' && e.button !== 0) return;
       e.preventDefault();
@@ -661,6 +691,17 @@ export default function InkEditor({ note }: { note: Note }) {
         lastPen = performance.now();
         cancelPan();
         cancelTap();
+        // タッチの信号で先に書き始めていたら、その線をペンの信号で続ける
+        const byTouch = live.current && live.current.pointerId <= TOUCH_ID ? live.current : erasing.current && erasing.current.pointerId <= TOUCH_ID ? erasing.current : null;
+        if (byTouch) {
+          byTouch.pointerId = e.pointerId;
+          try {
+            paper.setPointerCapture(e.pointerId);
+          } catch {
+            // 掴めなくても書けるようにする
+          }
+          return;
+        }
       }
       if (live.current) finishStroke();
       if (erasing.current) endErase();
@@ -688,25 +729,49 @@ export default function InkEditor({ note }: { note: Note }) {
         dragging.current = { pointerId: e.pointerId, mode: handle ? 'resize' : 'move', orig: it, x0: x, y0: y };
         return;
       }
-      if (tool === 'eraser') {
-        erasing.current = { pointerId: e.pointerId, removed: new Map(), added: new Map() };
+      startInk(e.pointerId, x, y, e.pointerType === 'pen' ? e.pressure || 0.5 : 0.5);
+    };
+
+    /** 線（または消しゴム）を書き始める。ペンの信号とタッチの信号のどちらからも使う */
+    const startInk = (pointerId: number, x: number, y: number, pressure: number) => {
+      const p = prefsRef.current;
+      if (p.tool === 'eraser') {
+        erasing.current = { pointerId, removed: new Map(), added: new Map() };
         eraseAt(x, y);
         return;
       }
-      const p = prefsRef.current;
-      const marker = tool === 'marker';
+      const marker = p.tool === 'marker';
       live.current = {
-        pointerId: e.pointerId,
+        pointerId,
         stroke: {
           id: uid(),
           noteId: note.id,
           tool: marker ? 'marker' : 'pen',
           color: marker ? p.markerColor : p.penColor,
           width: marker ? p.markerWidth : p.penWidth,
-          points: [x, y, e.pointerType === 'pen' ? e.pressure || 0.5 : 0.5],
+          points: [x, y, pressure],
           createdAt: Date.now(),
         },
       };
+    };
+
+    /** 線に点を足して、画面に描く */
+    const addInk = (pointerId: number, x: number, y: number, pressure: number) => {
+      if (erasing.current?.pointerId === pointerId) {
+        eraseAt(x, y);
+        return;
+      }
+      const l = live.current;
+      if (!l || l.pointerId !== pointerId) return;
+      const p = l.stroke.points;
+      const lx = p[p.length - 3], ly = p[p.length - 2];
+      if (Math.hypot(x - lx, y - ly) < 0.6) return;
+      p.push(Math.round(x * 10) / 10, Math.round(y * 10) / 10, Math.round(pressure * 100) / 100);
+      if (l.stroke.tool === 'pen') drawLiveSegment(l.stroke);
+      else {
+        markTiles(Math.min(y, ly) - l.stroke.width, Math.max(y, ly) + l.stroke.width);
+        scheduleDirty();
+      }
     };
 
     const onMove = (e: PointerEvent) => {
@@ -727,31 +792,13 @@ export default function InkEditor({ note }: { note: Note }) {
         setItems((l) => l.map((i) => (i.id === o.id ? next : i)));
         return;
       }
-      const events = e.getCoalescedEvents?.() ?? [];
-      const all = events.length ? events : [e];
-      if (erasing.current?.pointerId === e.pointerId) {
-        e.preventDefault();
-        for (const ev of all) {
-          const { x, y } = toLogical(ev);
-          eraseAt(x, y);
-        }
-        return;
-      }
-      const l = live.current;
-      if (!l || l.pointerId !== e.pointerId) return;
+      if (live.current?.pointerId !== e.pointerId && erasing.current?.pointerId !== e.pointerId) return;
       e.preventDefault();
       // 速く書いても線が欠けないよう、間の点もすべて使う
-      for (const ev of all) {
+      const events = e.getCoalescedEvents?.() ?? [];
+      for (const ev of events.length ? events : [e]) {
         const { x, y } = toLogical(ev);
-        const p = l.stroke.points;
-        const lx = p[p.length - 3], ly = p[p.length - 2];
-        if (Math.hypot(x - lx, y - ly) < 0.6) continue;
-        p.push(Math.round(x * 10) / 10, Math.round(y * 10) / 10, ev.pointerType === 'pen' ? Math.round((ev.pressure || 0.5) * 100) / 100 : 0.5);
-        if (l.stroke.tool === 'pen') drawLiveSegment(l.stroke);
-        else {
-          markTiles(Math.min(y, ly) - l.stroke.width, Math.max(y, ly) + l.stroke.width);
-          scheduleDirty();
-        }
+        addInk(e.pointerId, x, y, ev.pointerType === 'pen' ? ev.pressure || 0.5 : 0.5);
       }
     };
 
@@ -774,6 +821,7 @@ export default function InkEditor({ note }: { note: Note }) {
     };
 
     const onUp = (e: PointerEvent) => {
+      if (e.pointerType !== 'touch') log(`${e.type === 'pointerup' ? '↑' : '✕ ' + e.type} ${e.pointerType} #${e.pointerId} 点${(live.current?.pointerId === e.pointerId ? live.current.stroke.points.length / 3 : 0)}`);
       claimedByPointer = false;
       if (e.pointerType === 'pen') {
         penDown = false;
@@ -835,7 +883,34 @@ export default function InkEditor({ note }: { note: Note }) {
       }
       return { x: x / t.length, y: y / t.length };
     };
-    const isStylus = (e: TouchEvent) => Array.from(e.touches).some((t) => (t as Touch & { touchType?: string }).touchType === 'stylus');
+    const isPenTouch = (t: Touch) => (t as Touch & { touchType?: string }).touchType === 'stylus';
+    const isStylus = (e: TouchEvent) => Array.from(e.touches).some(isPenTouch);
+    const kinds = (e: TouchEvent) => Array.from(e.changedTouches, (t) => (isPenTouch(t) ? 'ペン' : '指')).join(',');
+    /** ペンのタッチの信号で書く（iPad でペンの信号 pointerdown が来ないことがあるときの予備） */
+    const penTouch = (e: TouchEvent) => {
+      for (const t of Array.from(e.changedTouches)) {
+        if (!isPenTouch(t)) continue;
+        const id = TOUCH_ID - t.identifier;
+        const { x, y } = toLogical(t);
+        if (e.type === 'touchstart') {
+          penDown = true;
+          lastPen = performance.now();
+          cancelTap();
+          const tool = prefsRef.current.tool;
+          if (live.current || erasing.current || memorizeRef.current || !paper.contains(t.target as Node)) continue;
+          if (tool !== 'pen' && tool !== 'marker' && tool !== 'eraser') continue;
+          log('タッチの信号で書き始め');
+          startInk(id, x, y, t.force || 0.5);
+        } else if (e.type === 'touchmove') addInk(id, x, y, t.force || 0.5);
+        else {
+          lastPen = performance.now();
+          if (live.current?.pointerId === id) finishStroke();
+          if (erasing.current?.pointerId === id) endErase();
+          // ペンの信号がまだ続いていなければ、ペンは離れた
+          if (!live.current && !erasing.current) penDown = false;
+        }
+      }
+    };
 
     const begin = (e: TouchEvent) => {
       const m = mid(e.touches);
@@ -859,6 +934,8 @@ export default function InkEditor({ note }: { note: Note }) {
       const target = e.target as HTMLElement;
       if (!paper.contains(target) && target.closest('button, a, input, [role="button"]')) return;
       e.preventDefault(); // スクリブル（手書き文字の自動変換）や長押しメニューも防ぐ
+      log(`t+ ${kinds(e)} (計${e.touches.length})`);
+      penTouch(e);
       fingers = e.touches.length;
       stopMomentum();
       // ペンで書いている間・書いた直後は、指（＝ペンを持つ手の手のひら）では何もしない
@@ -877,6 +954,7 @@ export default function InkEditor({ note }: { note: Note }) {
 
     const onTouchMove = (e: TouchEvent) => {
       e.preventDefault();
+      penTouch(e);
       if (!g || blocked) return;
       if (isStylus(e) || penDown) {
         cancelPan();
@@ -894,6 +972,8 @@ export default function InkEditor({ note }: { note: Note }) {
     };
 
     const onTouchEnd = (e: TouchEvent) => {
+      log(`${e.type === 'touchend' ? 't-' : 't✕'} ${kinds(e)} (残${e.touches.length})`);
+      penTouch(e);
       fingers = e.touches.length;
       if (fingers === 0) blocked = false;
       const p = g;
@@ -1072,7 +1152,10 @@ export default function InkEditor({ note }: { note: Note }) {
           </div>
         </details>
         <button className={`icon-btn tool${prefs.tool === 'flag' ? ' active' : ''}`} onClick={() => set({ tool: prefs.tool === 'flag' ? 'pen' : 'flag' })} title="復習マーク（押してから、付けたい場所をタップ）">🚩</button>
-        <PaperPicker note={note} />
+        <PaperPicker note={note}>
+          <div className="menu-caption">調べる</div>
+          <button className={debug ? 'active' : ''} onClick={toggleDebug}>🔍 ペンの信号を表示（書けないとき用）</button>
+        </PaperPicker>
         <span className="tb-spacer" />
         <MemorizeControls
           active={memorize}
@@ -1082,6 +1165,7 @@ export default function InkEditor({ note }: { note: Note }) {
           }}
         />
       </div>
+      {debug && <pre ref={debugRef} className="ink-debug" />}
       {memorize && <div className="memorize-banner">暗記シート中：隠れているところをタップすると表示されます（もう一度タップで隠す）。この間は書けません。</div>}
       {prefs.tool === 'select' && (
         <div className="flag-banner select-banner">
