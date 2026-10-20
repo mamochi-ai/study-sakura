@@ -8,6 +8,7 @@ import { formatDate } from '../lib/format';
 import { useSettings } from '../lib/settings';
 import { insertPageRef, useStudyBus } from '../views/studyBus';
 import { saveErrorText } from '../lib/errors';
+import { useScrollMemory } from '../lib/scrollMemory';
 import { askText, toast } from './Modal';
 import { notePaper, PaperPicker } from './PaperPicker';
 import { createReview } from '../db';
@@ -86,6 +87,8 @@ export default function NoteEditor({ note, onSaved }: { note: Note; onSaved?: ()
   });
   const editorRef = useRef<Editor | null>(null);
   editorRef.current = editor;
+  // ペットの部屋から戻ったときなどに、前に見ていた位置へ戻す
+  useScrollMemory(scrollRef, `text:${note.id}`, !!editor);
 
   const titleRef = useRef(title);
   titleRef.current = title;

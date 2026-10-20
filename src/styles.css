@@ -614,7 +614,7 @@ h1, h2 { margin: 0; }
 .note-paper:is(.paper-lined, .paper-grid, .paper-dots) .note-content hr { margin: calc(var(--line) / 2 - 1px) 0; }
 
 /* ============ 手書きノート ============ */
-.ink-scroll { background: var(--surface-2); touch-action: pan-y; }
+.ink-scroll { background: var(--surface-2); touch-action: none; }
 .ink-titlebar { padding: 10px 16px 8px; }
 .ink-title-btn { border: 0; background: transparent; font-size: 22px; font-weight: 700; padding: 2px 4px; border-radius: 6px; cursor: pointer; text-align: left; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ink-title-btn:hover { background: var(--surface); }

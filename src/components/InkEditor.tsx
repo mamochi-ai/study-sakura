@@ -2,6 +2,7 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createReview, db, REVIEW_STATUS, uid, type InkItem, type Note, type Stroke } from '../db';
 import { saveErrorText } from '../lib/errors';
+import { useScrollMemory } from '../lib/scrollMemory';
 import { formatDate } from '../lib/format';
 import { markerByInkColor, MARKERS, RED_PENS } from '../lib/memorize';
 import { getSettings, useSettings } from '../lib/settings';
@@ -190,6 +191,8 @@ export default function InkEditor({ note }: { note: Note }) {
   const reviews = useLiveQuery(() => db.reviews.where('noteId').equals(note.id).toArray(), [note.id]) ?? [];
 
   const scrollRef = useRef<HTMLDivElement>(null);
+  // ペットの部屋から戻ったときなどに、前に見ていた位置へ戻す（筆跡を読み込んで高さが決まってから）
+  useScrollMemory(scrollRef, `ink:${note.id}`, loaded);
   const paperRef = useRef<HTMLDivElement>(null);
   const tilesRef = useRef<HTMLDivElement>(null);
   const strokes = useRef<Stroke[]>([]);
@@ -841,6 +844,9 @@ export default function InkEditor({ note }: { note: Note }) {
     }
 
     const onTouchStart = (e: TouchEvent) => {
+      // 用紙の外のボタン（タイトルなど）は、ふつうに押せるようにする
+      const target = e.target as HTMLElement;
+      if (!paper.contains(target) && target.closest('button, a, input, [role="button"]')) return;
       e.preventDefault(); // スクリブル（手書き文字の自動変換）や長押しメニューも防ぐ
       stopMomentum();
       // ペンで書いている間・書いた直後は、指（＝ペンを持つ手の手のひら）では何もしない
@@ -918,10 +924,12 @@ export default function InkEditor({ note }: { note: Note }) {
     paper.addEventListener('pointerup', onUp);
     paper.addEventListener('pointercancel', onUp);
     paper.addEventListener('lostpointercapture', onUp);
-    paper.addEventListener('touchstart', onTouchStart, { passive: false });
-    paper.addEventListener('touchmove', onTouchMove, { passive: false });
-    paper.addEventListener('touchend', onTouchEnd);
-    paper.addEventListener('touchcancel', onTouchEnd);
+    // 指（手のひら）は用紙のまわりの余白に置かれることも多いので、スクロールする枠全体で受ける。
+    // 余白で iPad の標準スクロールが始まると、書いている途中のペンが取り消されて線が書けなくなる
+    scroller.addEventListener('touchstart', onTouchStart, { passive: false });
+    scroller.addEventListener('touchmove', onTouchMove, { passive: false });
+    scroller.addEventListener('touchend', onTouchEnd);
+    scroller.addEventListener('touchcancel', onTouchEnd);
     return () => {
       stopMomentum();
       paper.removeEventListener('pointerdown', onDown);
@@ -929,13 +937,16 @@ export default function InkEditor({ note }: { note: Note }) {
       paper.removeEventListener('pointerup', onUp);
       paper.removeEventListener('pointercancel', onUp);
       paper.removeEventListener('lostpointercapture', onUp);
-      paper.removeEventListener('touchstart', onTouchStart);
-      paper.removeEventListener('touchmove', onTouchMove);
-      paper.removeEventListener('touchend', onTouchEnd);
-      paper.removeEventListener('touchcancel', onTouchEnd);
+      scroller.removeEventListener('touchstart', onTouchStart);
+      scroller.removeEventListener('touchmove', onTouchMove);
+      scroller.removeEventListener('touchend', onTouchEnd);
+      scroller.removeEventListener('touchcancel', onTouchEnd);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [note.id, loaded]);
+
+  /** 色や太さを選んだら、すぐ書けるようにメニューを閉じる */
+  const closeMenu = (e: React.MouseEvent) => (e.currentTarget as HTMLElement).closest('details')?.removeAttribute('open');
 
   const deleteItem = (id: string) => {
     const it = itemsRef.current.find((i) => i.id === id);
@@ -1020,13 +1031,19 @@ export default function InkEditor({ note }: { note: Note }) {
             <div className="menu-caption">{prefs.tool === 'marker' ? 'マーカーの色' : 'ペンの色'}</div>
             <div className="swatches">
               {colors.map((c) => (
-                <button key={c} className={`ink-color${c === curColor ? ' active' : ''}`} style={{ background: c }} onClick={() => set(prefs.tool === 'marker' ? { markerColor: c } : { penColor: c })} aria-label={`色 ${c}`} />
+                <button key={c} className={`ink-color${c === curColor ? ' active' : ''}`} style={{ background: c }} onClick={(e) => {
+                    set(prefs.tool === 'marker' ? { markerColor: c } : { penColor: c });
+                    closeMenu(e);
+                  }} aria-label={`色 ${c}`} />
               ))}
             </div>
             <div className="menu-caption">太さ</div>
             <div className="swatches">
               {widths.map((w) => (
-                <button key={w} className={`ink-width${w === curWidth ? ' active' : ''}`} onClick={() => set(prefs.tool === 'marker' ? { markerWidth: w } : { penWidth: w })} aria-label={`太さ ${w}`}>
+                <button key={w} className={`ink-width${w === curWidth ? ' active' : ''}`} onClick={(e) => {
+                  set(prefs.tool === 'marker' ? { markerWidth: w } : { penWidth: w });
+                  closeMenu(e);
+                }} aria-label={`太さ ${w}`}>
                   <span style={{ width: Math.max(4, w * (prefs.tool === 'marker' ? 0.7 : 2)), height: Math.max(4, w * (prefs.tool === 'marker' ? 0.7 : 2)), background: curColor }} />
                 </button>
               ))}
