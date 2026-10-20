@@ -11,7 +11,10 @@ test('参考書を追加してすぐ開け、ペットの部屋から戻って�
   // ペットの部屋へ行って戻る
   await page.locator('.mini-pet').click();
   await expect(page.locator('.pet-view')).toBeVisible();
+  // ペットがいないときに開く「お迎え」の画面を閉じる（開いてから Escape を押す）
+  await expect(page.locator('.modal')).toBeVisible();
   await page.keyboard.press('Escape');
+  await expect(page.locator('.modal-backdrop')).toHaveCount(0);
   await page.getByRole('button', { name: '← 戻る' }).click();
   await expect(canvas(page)).toBeVisible({ timeout: 20_000 });
 
