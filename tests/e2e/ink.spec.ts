@@ -239,3 +239,36 @@ test('手書き：ペンの信号（pointerdown）が来なくても、ペンの
   for (const w of spans) expect(Math.abs(w - spans[0])).toBeLessThan(2);
   expect(spans[0]).toBeGreaterThan(100);
 });
+
+test('手書き（試験）：指を pointer の信号で受け取る設定でも、指でスクロールでき、ペンで書ける', async ({ page }) => {
+  await openDesk(page);
+  await createBinder(page);
+  await page.locator('.note-tabs-bar summary[title="新しいノート"]').click();
+  await page.getByText('✏️ 手書きノート').click();
+  const paper = page.locator('.ink-paper');
+  await expect(paper).toBeVisible();
+  await page.locator('summary[title="用紙（罫線）"]').click();
+  await page.getByRole('button', { name: /指を別の方法で受け取る/ }).click();
+  await expect(page.locator('details.menu[open]')).toHaveCount(0);
+
+  const before = await page.locator('.ink-scroll').evaluate((el) => el.scrollTop);
+  await paper.evaluate(async (el) => {
+    const r = el.getBoundingClientRect();
+    const ptr = (type: string, y: number) =>
+      el.dispatchEvent(new PointerEvent(type, { pointerId: 5, pointerType: 'touch', isPrimary: true, clientX: r.left + 300, clientY: r.top + y, width: 20, height: 20, bubbles: true, cancelable: true }));
+    ptr('pointerdown', 500);
+    for (let y = 480; y >= 300; y -= 20) {
+      ptr('pointermove', y);
+      await new Promise((res) => setTimeout(res, 16));
+    }
+    ptr('pointerup', 300);
+  });
+  await expect.poll(() => page.locator('.ink-scroll').evaluate((el) => el.scrollTop)).toBeGreaterThan(before + 100);
+
+  const box = (await paper.boundingBox())!;
+  await page.mouse.move(box.x + 60, box.y + 200);
+  await page.mouse.down();
+  await page.mouse.move(box.x + 300, box.y + 210, { steps: 6 });
+  await page.mouse.up();
+  await expect.poll(async () => (await readTable(page, 'strokes')).length).toBe(1);
+});
