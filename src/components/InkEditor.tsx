@@ -946,7 +946,10 @@ export default function InkEditor({ note }: { note: Note }) {
       // 用紙の外のボタン（タイトルなど）は、ふつうに押せるようにする
       const target = e.target as HTMLElement;
       if (!paper.contains(target) && target.closest('button, a, input, [role="button"]')) return;
-      e.preventDefault(); // スクリブル（手書き文字の自動変換）や長押しメニューも防ぐ
+      // ペンのタッチだけ止める（スクリブル＝手書き文字の自動変換を防ぐ）。
+      // 指（手のひら）のタッチを止めると、iPad が手のひらと判断し終えるまでペンの信号が届かなくなる（iPad の記録で確認）。
+      // 標準のスクロール・拡大は touch-action: none、長押しメニューは CSS で止めているので、指は止めなくてよい
+      if (Array.from(e.changedTouches).some(isPenTouch)) e.preventDefault();
       log(`t+ ${kinds(e)} (計${e.touches.length})`);
       penTouch(e);
       fingers = e.touches.length;
@@ -966,7 +969,7 @@ export default function InkEditor({ note }: { note: Note }) {
     };
 
     const onTouchMove = (e: TouchEvent) => {
-      e.preventDefault();
+      if (isStylus(e)) e.preventDefault();
       penTouch(e);
       if (!g || blocked) return;
       if (isStylus(e) || penDown) {

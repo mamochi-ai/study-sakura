@@ -39,27 +39,39 @@ test('手書きノート：書いた線が保存され、2 本指で触れても
   expect((await readTable(page, 'strokes')).length).toBe(2);
 });
 
-test('手書き：用紙の横の余白に手を置いても、iPad の標準スクロールにならない（ペンが取り消されない）', async ({ page }) => {
+test('手書き：手のひらのタッチは止めない（止めるとペンが届かなくなる）。標準のスクロールは CSS で止め、ペンのタッチは止める', async ({ page }) => {
   await openDesk(page);
   await createBinder(page);
   await page.locator('.note-tabs-bar summary[title="新しいノート"]').click();
   await page.getByText('✏️ 手書きノート').click();
   await expect(page.locator('.ink-paper')).toBeVisible();
-  // 余白（用紙の外、スクロール枠の中）での touchstart が止められているか
-  const prevented = await page.locator('.ink-scroll').evaluate((scroller) => {
-    const paper = scroller.querySelector('.ink-paper')!;
+  const r = await page.locator('.ink-scroll').evaluate((scroller) => {
+    const paper = scroller.querySelector<HTMLElement>('.ink-paper')!;
     const s = scroller.getBoundingClientRect();
     const p = paper.getBoundingClientRect();
-    const x = (p.right + s.right) / 2;
-    const y = p.top + 200;
-    const t = new Touch({ identifier: 9, target: scroller, clientX: x, clientY: y });
-    const ev = new TouchEvent('touchstart', { touches: [t], targetTouches: [t], changedTouches: [t], bubbles: true, cancelable: true });
-    scroller.dispatchEvent(ev);
-    scroller.dispatchEvent(new TouchEvent('touchend', { touches: [], changedTouches: [t], bubbles: true, cancelable: true }));
-    return { prevented: ev.defaultPrevented, margin: s.right - p.right };
+    const touch = (target: Element, x: number, y: number, pen: boolean) => {
+      const t = new Touch({ identifier: pen ? 2 : 1, target, clientX: x, clientY: y });
+      if (pen) Object.defineProperty(t, 'touchType', { value: 'stylus' });
+      const ev = new TouchEvent('touchstart', { touches: [t], targetTouches: [t], changedTouches: [t], bubbles: true, cancelable: true });
+      target.dispatchEvent(ev);
+      target.dispatchEvent(new TouchEvent('touchend', { touches: [], changedTouches: [t], bubbles: true, cancelable: true }));
+      return ev.defaultPrevented;
+    };
+    return {
+      margin: s.right - p.right,
+      // 余白（用紙の外、スクロール枠の中）と用紙の上の手のひら
+      palmMargin: touch(scroller, (p.right + s.right) / 2, p.top + 200, false),
+      palmPaper: touch(paper, p.left + 200, p.top + 200, false),
+      pen: touch(paper, p.left + 200, p.top + 300, true),
+      touchAction: [getComputedStyle(scroller).touchAction, getComputedStyle(paper).touchAction],
+    };
   });
-  expect(prevented.margin).toBeGreaterThan(0);
-  expect(prevented.prevented).toBe(true);
+  expect(r.margin).toBeGreaterThan(0);
+  expect(r.palmMargin).toBe(false);
+  expect(r.palmPaper).toBe(false);
+  expect(r.pen).toBe(true);
+  // iPad の標準スクロール（ペンを取り消す）は CSS で止めている
+  expect(r.touchAction).toEqual(['none', 'none']);
   // タイトルのボタンは指で押せる
   const titleTap = await page.locator('.ink-title-btn').evaluate((btn) => {
     const t = new Touch({ identifier: 10, target: btn, clientX: 10, clientY: 10 });
