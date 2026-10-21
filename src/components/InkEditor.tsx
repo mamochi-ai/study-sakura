@@ -1039,6 +1039,24 @@ export default function InkEditor({ note }: { note: Note }) {
     paper.addEventListener('lostpointercapture', onUp);
     // 指（手のひら）は用紙のまわりの余白に置かれることも多いので、スクロールする枠全体で受ける。
     // 余白で iPad の標準スクロールが始まると、書いている途中のペンが取り消されて線が書けなくなる
+    /** 調査用：用紙（指はスクロール枠）の外に届いた信号も記録する。どこにも届いていないのか、別の場所に届いているのかを見分ける */
+    const describe = (el: EventTarget | null) => {
+      if (!(el instanceof Element)) return String(el);
+      const cls = typeof el.className === 'string' && el.className ? '.' + el.className.trim().split(/\s+/).slice(0, 2).join('.') : '';
+      return el.tagName.toLowerCase() + cls;
+    };
+    const onOutside = (e: Event) => {
+      const t = e.target as Node | null;
+      const inside = e.type === 'pointerdown' ? paper.contains(t) : scroller.contains(t);
+      if (inside) return;
+      const kind = e instanceof PointerEvent ? e.pointerType : e instanceof TouchEvent ? Array.from(e.changedTouches, (x) => (isPenTouch(x) ? 'ペン' : '指')).join(',') : '';
+      log(`外 ${e.type} ${kind} → ${describe(e.target)}`);
+    };
+    document.addEventListener('pointerdown', onOutside, true);
+    document.addEventListener('touchstart', onOutside, true);
+    // iPad の手書き入力（スクリブル）などが文字入力欄に入ると、ここに出る
+    const onFocus = (e: FocusEvent) => log(`入力欄へ → ${describe(e.target)}`);
+    document.addEventListener('focusin', onFocus);
     scroller.addEventListener('touchstart', onTouchStart, { passive: false });
     scroller.addEventListener('touchmove', onTouchMove, { passive: false });
     scroller.addEventListener('touchend', onTouchEnd);
@@ -1055,6 +1073,9 @@ export default function InkEditor({ note }: { note: Note }) {
       scroller.removeEventListener('touchmove', onTouchMove);
       scroller.removeEventListener('touchend', onTouchEnd);
       scroller.removeEventListener('touchcancel', onTouchEnd);
+      document.removeEventListener('pointerdown', onOutside, true);
+      document.removeEventListener('touchstart', onOutside, true);
+      document.removeEventListener('focusin', onFocus);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [note.id, loaded]);
