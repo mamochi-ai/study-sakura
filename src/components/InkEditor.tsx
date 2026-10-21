@@ -24,10 +24,7 @@ const ERASER_R = 10;
 const TAP_SLOP = 8;
 /** 指のタップを実行するまで待つ時間（この間にペンが触れたら、手のひらとして取り消す） */
 const PALM_WAIT = 250;
-/** タッチの信号で書いている線の番号（ペンの信号の番号と重ならないように負の数） */
-const TOUCH_ID = -1000;
 const DEBUG_KEY = 'study-sakura:ink-debug';
-const FINGER_KEY = 'study-sakura:ink-finger-pointer';
 
 type Tool = 'pen' | 'marker' | 'eraser' | 'select' | 'flag';
 type EraserMode = 'stroke' | 'partial';
@@ -200,22 +197,6 @@ export default function InkEditor({ note }: { note: Note }) {
       return false;
     }
   });
-  /** 試験：指をタッチの信号ではなく pointer の信号で受け取る（タッチの信号を一切聞かない） */
-  const [fingerPointer, setFingerPointer] = useState(() => {
-    try {
-      return localStorage.getItem(FINGER_KEY) === '1';
-    } catch {
-      return false;
-    }
-  });
-  const toggleFingerPointer = () => {
-    setFingerPointer(!fingerPointer);
-    try {
-      localStorage.setItem(FINGER_KEY, fingerPointer ? '0' : '1');
-    } catch {
-      // 保存できなくても切り替えはできる
-    }
-  };
   const debugRef = useRef<HTMLPreElement>(null);
   const logLines = useRef<string[]>([]);
   const log = (msg: string) => {
@@ -708,17 +689,6 @@ export default function InkEditor({ note }: { note: Note }) {
         lastPen = performance.now();
         cancelPan();
         cancelTap();
-        // タッチの信号で先に書き始めていたら、その線をペンの信号で続ける
-        const byTouch = live.current && live.current.pointerId <= TOUCH_ID ? live.current : erasing.current && erasing.current.pointerId <= TOUCH_ID ? erasing.current : null;
-        if (byTouch) {
-          byTouch.pointerId = e.pointerId;
-          try {
-            paper.setPointerCapture(e.pointerId);
-          } catch {
-            // 掴めなくても書けるようにする
-          }
-          return;
-        }
       }
       if (live.current) finishStroke();
       if (erasing.current) endErase();
@@ -749,7 +719,7 @@ export default function InkEditor({ note }: { note: Note }) {
       startInk(e.pointerId, x, y, e.pointerType === 'pen' ? e.pressure || 0.5 : 0.5);
     };
 
-    /** 線（または消しゴム）を書き始める。ペンの信号とタッチの信号のどちらからも使う */
+    /** 線（または消しゴム）を書き始める */
     const startInk = (pointerId: number, x: number, y: number, pressure: number) => {
       const p = prefsRef.current;
       if (p.tool === 'eraser') {
@@ -916,32 +886,6 @@ export default function InkEditor({ note }: { note: Note }) {
         touchStarts.delete(t.identifier);
         return `${name} 動${Math.round(t.clientX - s0.x)},${Math.round(t.clientY - s0.y)} ${Math.round(performance.now() - s0.t)}ms`;
       }).join(',');
-    /** ペンのタッチの信号で書く（iPad でペンの信号 pointerdown が来ないことがあるときの予備） */
-    const penTouch = (e: TouchEvent) => {
-      for (const t of Array.from(e.changedTouches)) {
-        if (!isPenTouch(t)) continue;
-        const id = TOUCH_ID - t.identifier;
-        const { x, y } = toLogical(t);
-        if (e.type === 'touchstart') {
-          penDown = true;
-          lastPen = performance.now();
-          cancelTap();
-          const tool = prefsRef.current.tool;
-          if (live.current || erasing.current || memorizeRef.current || !paper.contains(t.target as Node)) continue;
-          if (tool !== 'pen' && tool !== 'marker' && tool !== 'eraser') continue;
-          log('タッチの信号で書き始め');
-          startInk(id, x, y, t.force || 0.5);
-        } else if (e.type === 'touchmove') addInk(id, x, y, t.force || 0.5);
-        else {
-          lastPen = performance.now();
-          if (live.current?.pointerId === id) finishStroke();
-          if (erasing.current?.pointerId === id) endErase();
-          // ペンの信号がまだ続いていなければ、ペンは離れた
-          if (!live.current && !erasing.current) penDown = false;
-        }
-      }
-    };
-
     const begin = (e: TouchEvent) => {
       const m = mid(e.touches);
       g = { x: m.x, y: m.y, left: scroller.scrollLeft, top: scroller.scrollTop, moved: false, multi: e.touches.length > 1, t0: performance.now(), samples: [{ t: performance.now(), x: m.x, y: m.y }] };
@@ -963,12 +907,8 @@ export default function InkEditor({ note }: { note: Note }) {
       // 用紙の外のボタン（タイトルなど）は、ふつうに押せるようにする
       const target = e.target as HTMLElement;
       if (!paper.contains(target) && target.closest('button, a, input, [role="button"]')) return;
-      // ペンのタッチだけ止める（スクリブル＝手書き文字の自動変換を防ぐ）。
-      // 指（手のひら）のタッチを止めると、iPad が手のひらと判断し終えるまでペンの信号が届かなくなる（iPad の記録で確認）。
-      // 標準のスクロール・拡大は touch-action: none、長押しメニューは CSS で止めているので、指は止めなくてよい
-      if (Array.from(e.changedTouches).some(isPenTouch)) e.preventDefault();
+      e.preventDefault(); // スクリブル（手書き文字の自動変換）や長押しメニューも防ぐ
       log(`t+ ${kinds(e)} (計${e.touches.length})`);
-      penTouch(e);
       fingers = e.touches.length;
       stopMomentum();
       // ペンで書いている間・書いた直後は、指（＝ペンを持つ手の手のひら）では何もしない
@@ -986,8 +926,7 @@ export default function InkEditor({ note }: { note: Note }) {
     };
 
     const onTouchMove = (e: TouchEvent) => {
-      if (isStylus(e)) e.preventDefault();
-      penTouch(e);
+      e.preventDefault();
       if (!g || blocked) return;
       if (isStylus(e) || penDown) {
         cancelPan();
@@ -1006,7 +945,6 @@ export default function InkEditor({ note }: { note: Note }) {
 
     const onTouchEnd = (e: TouchEvent) => {
       log(`${e.type === 'touchend' ? 't-' : 't✕'} ${kinds(e)} (残${e.touches.length})`);
-      penTouch(e);
       fingers = e.touches.length;
       if (fingers === 0) blocked = false;
       const p = g;
@@ -1073,45 +1011,14 @@ export default function InkEditor({ note }: { note: Note }) {
       log(`外 ${e.type} ${kind} → ${describe(e.target)}`);
     };
     document.addEventListener('pointerdown', onOutside, true);
-    if (!fingerPointer) document.addEventListener('touchstart', onOutside, true);
+    document.addEventListener('touchstart', onOutside, true);
     // iPad の手書き入力（スクリブル）などが文字入力欄に入ると、ここに出る
     const onFocus = (e: FocusEvent) => log(`入力欄へ → ${describe(e.target)}`);
     document.addEventListener('focusin', onFocus);
-    /* 試験：指を pointer の信号で受け取り、タッチの信号の形にして同じ処理に渡す */
-    type FakeTouch = { identifier: number; clientX: number; clientY: number; radiusX: number; force: number; target: EventTarget | null };
-    const fingerPtrs = new Map<number, FakeTouch>();
-    const asTouch = (e: PointerEvent): FakeTouch => ({ identifier: e.pointerId, clientX: e.clientX, clientY: e.clientY, radiusX: e.width / 2, force: e.pressure, target: e.target });
-    const fake = (type: string, e: PointerEvent) =>
-      ({ type, target: e.target, touches: [...fingerPtrs.values()], changedTouches: [asTouch(e)], preventDefault() {} }) as unknown as TouchEvent;
-    const onFingerDown = (e: PointerEvent) => {
-      if (e.pointerType !== 'touch') return;
-      fingerPtrs.set(e.pointerId, asTouch(e));
-      onTouchStart(fake('touchstart', e));
-    };
-    const onFingerMove = (e: PointerEvent) => {
-      if (!fingerPtrs.has(e.pointerId)) return;
-      fingerPtrs.set(e.pointerId, asTouch(e));
-      onTouchMove(fake('touchmove', e));
-    };
-    const onFingerUp = (e: PointerEvent) => {
-      if (!fingerPtrs.delete(e.pointerId)) return;
-      onTouchEnd(fake(e.type === 'pointerup' ? 'touchend' : 'touchcancel', e));
-    };
-    const fingerEvents: [string, EventListener][] = fingerPointer
-      ? [
-          ['pointerdown', onFingerDown as EventListener],
-          ['pointermove', onFingerMove as EventListener],
-          ['pointerup', onFingerUp as EventListener],
-          ['pointercancel', onFingerUp as EventListener],
-        ]
-      : [
-          ['touchstart', onTouchStart as EventListener],
-          ['touchmove', onTouchMove as EventListener],
-          ['touchend', onTouchEnd as EventListener],
-          ['touchcancel', onTouchEnd as EventListener],
-        ];
-    for (const [type, fn] of fingerEvents) scroller.addEventListener(type, fn, { passive: false });
-    if (fingerPointer) log('試験：指は pointer の信号で受け取る');
+    scroller.addEventListener('touchstart', onTouchStart, { passive: false });
+    scroller.addEventListener('touchmove', onTouchMove, { passive: false });
+    scroller.addEventListener('touchend', onTouchEnd);
+    scroller.addEventListener('touchcancel', onTouchEnd);
     return () => {
       stopMomentum();
       cancelTap();
@@ -1120,13 +1027,16 @@ export default function InkEditor({ note }: { note: Note }) {
       paper.removeEventListener('pointerup', onUp);
       paper.removeEventListener('pointercancel', onUp);
       paper.removeEventListener('lostpointercapture', onUp);
-      for (const [type, fn] of fingerEvents) scroller.removeEventListener(type, fn);
+      scroller.removeEventListener('touchstart', onTouchStart);
+      scroller.removeEventListener('touchmove', onTouchMove);
+      scroller.removeEventListener('touchend', onTouchEnd);
+      scroller.removeEventListener('touchcancel', onTouchEnd);
       document.removeEventListener('pointerdown', onOutside, true);
       document.removeEventListener('touchstart', onOutside, true);
       document.removeEventListener('focusin', onFocus);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [note.id, loaded, fingerPointer]);
+  }, [note.id, loaded]);
 
   /** 色や太さを選んだら、すぐ書けるようにメニューを閉じる */
   const closeMenu = (e: React.MouseEvent) => (e.currentTarget as HTMLElement).closest('details')?.removeAttribute('open');
@@ -1237,7 +1147,6 @@ export default function InkEditor({ note }: { note: Note }) {
         <PaperPicker note={note}>
           <div className="menu-caption">調べる</div>
           <button className={debug ? 'active' : ''} onClick={toggleDebug}>🔍 ペンの信号を表示（書けないとき用）</button>
-          <button className={fingerPointer ? 'active' : ''} onClick={toggleFingerPointer}>🧪 指を別の方法で受け取る（試験）</button>
         </PaperPicker>
         <span className="tb-spacer" />
         <MemorizeControls

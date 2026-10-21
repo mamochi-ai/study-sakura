@@ -39,39 +39,27 @@ test('手書きノート：書いた線が保存され、2 本指で触れても
   expect((await readTable(page, 'strokes')).length).toBe(2);
 });
 
-test('手書き：手のひらのタッチは止めない（止めるとペンが届かなくなる）。標準のスクロールは CSS で止め、ペンのタッチは止める', async ({ page }) => {
+test('手書き：用紙の横の余白に手を置いても、iPad の標準スクロールにならない（ペンが取り消されない）', async ({ page }) => {
   await openDesk(page);
   await createBinder(page);
   await page.locator('.note-tabs-bar summary[title="新しいノート"]').click();
   await page.getByText('✏️ 手書きノート').click();
   await expect(page.locator('.ink-paper')).toBeVisible();
-  const r = await page.locator('.ink-scroll').evaluate((scroller) => {
-    const paper = scroller.querySelector<HTMLElement>('.ink-paper')!;
+  // 余白（用紙の外、スクロール枠の中）での touchstart が止められているか
+  const prevented = await page.locator('.ink-scroll').evaluate((scroller) => {
+    const paper = scroller.querySelector('.ink-paper')!;
     const s = scroller.getBoundingClientRect();
     const p = paper.getBoundingClientRect();
-    const touch = (target: Element, x: number, y: number, pen: boolean) => {
-      const t = new Touch({ identifier: pen ? 2 : 1, target, clientX: x, clientY: y });
-      if (pen) Object.defineProperty(t, 'touchType', { value: 'stylus' });
-      const ev = new TouchEvent('touchstart', { touches: [t], targetTouches: [t], changedTouches: [t], bubbles: true, cancelable: true });
-      target.dispatchEvent(ev);
-      target.dispatchEvent(new TouchEvent('touchend', { touches: [], changedTouches: [t], bubbles: true, cancelable: true }));
-      return ev.defaultPrevented;
-    };
-    return {
-      margin: s.right - p.right,
-      // 余白（用紙の外、スクロール枠の中）と用紙の上の手のひら
-      palmMargin: touch(scroller, (p.right + s.right) / 2, p.top + 200, false),
-      palmPaper: touch(paper, p.left + 200, p.top + 200, false),
-      pen: touch(paper, p.left + 200, p.top + 300, true),
-      touchAction: [getComputedStyle(scroller).touchAction, getComputedStyle(paper).touchAction],
-    };
+    const x = (p.right + s.right) / 2;
+    const y = p.top + 200;
+    const t = new Touch({ identifier: 9, target: scroller, clientX: x, clientY: y });
+    const ev = new TouchEvent('touchstart', { touches: [t], targetTouches: [t], changedTouches: [t], bubbles: true, cancelable: true });
+    scroller.dispatchEvent(ev);
+    scroller.dispatchEvent(new TouchEvent('touchend', { touches: [], changedTouches: [t], bubbles: true, cancelable: true }));
+    return { prevented: ev.defaultPrevented, margin: s.right - p.right };
   });
-  expect(r.margin).toBeGreaterThan(0);
-  expect(r.palmMargin).toBe(false);
-  expect(r.palmPaper).toBe(false);
-  expect(r.pen).toBe(true);
-  // iPad の標準スクロール（ペンを取り消す）は CSS で止めている
-  expect(r.touchAction).toEqual(['none', 'none']);
+  expect(prevented.margin).toBeGreaterThan(0);
+  expect(prevented.prevented).toBe(true);
   // タイトルのボタンは指で押せる
   const titleTap = await page.locator('.ink-title-btn').evaluate((btn) => {
     const t = new Touch({ identifier: 10, target: btn, clientX: 10, clientY: 10 });
@@ -179,7 +167,7 @@ test('手書き：手のひらが軽く触れてすぐペンが来たら、指�
   await expect(page.locator('.modal')).toBeVisible();
 });
 
-test('手書き：ペンの信号（pointerdown）が来なくても、ペンのタッチの信号で書ける。両方来ても線は 1 本', async ({ page }) => {
+test('手書き：ペンの信号の記録を表示でき、手のひらを置いたままペンで書ける（ペンのタッチの信号が一緒に来ても線は 1 本）', async ({ page }) => {
   await openDesk(page);
   await createBinder(page);
   await page.locator('.note-tabs-bar summary[title="新しいノート"]').click();
@@ -190,8 +178,8 @@ test('手書き：ペンの信号（pointerdown）が来なくても、ペンの
   await page.getByRole('button', { name: /ペンの信号を表示/ }).click();
   await expect(page.locator('.ink-debug')).toBeVisible();
 
-  /** order：touch＝タッチの信号だけ／touchFirst・penFirst＝両方（先に来るほうが違う） */
-  const draw = (order: 'touch' | 'touchFirst' | 'penFirst', y: number) =>
+  /** order：ペンの信号とペンのタッチの信号のどちらが先に来るか */
+  const draw = (order: 'touchFirst' | 'penFirst', y: number) =>
     paper.evaluate(
       async (el, { order, y }) => {
         const r = el.getBoundingClientRect();
@@ -205,32 +193,29 @@ test('手書き：ペンの信号（pointerdown）が来なくても、ペンの
           el.dispatchEvent(new PointerEvent(type, { pointerId: 9, pointerType: 'pen', isPrimary: true, clientX: r.left + x, clientY: r.top + y, pressure: 0.5, bubbles: true, cancelable: true }));
         // 手のひらを置いたまま
         el.dispatchEvent(new TouchEvent('touchstart', { touches: [palm], targetTouches: [palm], changedTouches: [palm], bubbles: true, cancelable: true }));
-        const withPen = order !== 'touch';
         if (order === 'penFirst') pen('pointerdown', 60);
         touch('touchstart', 60, [palm, pt(60)]);
         if (order === 'touchFirst') pen('pointerdown', 60);
         for (let x = 80; x <= 300; x += 20) {
-          if (withPen) pen('pointermove', x);
+          pen('pointermove', x);
           touch('touchmove', x, [palm, pt(x)]);
           await new Promise((res) => setTimeout(res, 10));
         }
-        if (withPen) pen('pointerup', 300);
+        pen('pointerup', 300);
         touch('touchend', 300, [palm]);
         el.dispatchEvent(new TouchEvent('touchend', { touches: [], targetTouches: [], changedTouches: [palm], bubbles: true, cancelable: true }));
       },
       { order, y },
     );
 
-  await draw('touch', 100);
-  await expect.poll(async () => (await readTable(page, 'strokes')).length).toBe(1);
-  await expect(page.locator('.ink-debug')).toContainText('タッチの信号で書き始め');
   await draw('touchFirst', 200);
-  await expect.poll(async () => (await readTable(page, 'strokes')).length).toBe(2);
+  await expect.poll(async () => (await readTable(page, 'strokes')).length).toBe(1);
+  await expect(page.locator('.ink-debug')).toContainText('↓ pen');
   await draw('penFirst', 300);
-  await expect.poll(async () => (await readTable(page, 'strokes')).length).toBe(3);
+  await expect.poll(async () => (await readTable(page, 'strokes')).length).toBe(2);
   await page.waitForTimeout(500);
   const strokes = await readTable<{ points: number[] }>(page, 'strokes');
-  expect(strokes).toHaveLength(3);
+  expect(strokes).toHaveLength(2);
   // どの線も最初から最後まで同じ長さでつながっている（途中で別の線に分かれていない）
   const spans = strokes.map((s) => {
     const xs = s.points.filter((_, i) => i % 3 === 0);
@@ -238,37 +223,4 @@ test('手書き：ペンの信号（pointerdown）が来なくても、ペンの
   });
   for (const w of spans) expect(Math.abs(w - spans[0])).toBeLessThan(2);
   expect(spans[0]).toBeGreaterThan(100);
-});
-
-test('手書き（試験）：指を pointer の信号で受け取る設定でも、指でスクロールでき、ペンで書ける', async ({ page }) => {
-  await openDesk(page);
-  await createBinder(page);
-  await page.locator('.note-tabs-bar summary[title="新しいノート"]').click();
-  await page.getByText('✏️ 手書きノート').click();
-  const paper = page.locator('.ink-paper');
-  await expect(paper).toBeVisible();
-  await page.locator('summary[title="用紙（罫線）"]').click();
-  await page.getByRole('button', { name: /指を別の方法で受け取る/ }).click();
-  await expect(page.locator('details.menu[open]')).toHaveCount(0);
-
-  const before = await page.locator('.ink-scroll').evaluate((el) => el.scrollTop);
-  await paper.evaluate(async (el) => {
-    const r = el.getBoundingClientRect();
-    const ptr = (type: string, y: number) =>
-      el.dispatchEvent(new PointerEvent(type, { pointerId: 5, pointerType: 'touch', isPrimary: true, clientX: r.left + 300, clientY: r.top + y, width: 20, height: 20, bubbles: true, cancelable: true }));
-    ptr('pointerdown', 500);
-    for (let y = 480; y >= 300; y -= 20) {
-      ptr('pointermove', y);
-      await new Promise((res) => setTimeout(res, 16));
-    }
-    ptr('pointerup', 300);
-  });
-  await expect.poll(() => page.locator('.ink-scroll').evaluate((el) => el.scrollTop)).toBeGreaterThan(before + 100);
-
-  const box = (await paper.boundingBox())!;
-  await page.mouse.move(box.x + 60, box.y + 200);
-  await page.mouse.down();
-  await page.mouse.move(box.x + 300, box.y + 210, { steps: 6 });
-  await page.mouse.up();
-  await expect.poll(async () => (await readTable(page, 'strokes')).length).toBe(1);
 });
