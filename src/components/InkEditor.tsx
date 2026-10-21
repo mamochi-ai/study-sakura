@@ -24,8 +24,6 @@ const ERASER_R = 10;
 const TAP_SLOP = 8;
 /** 指のタップを実行するまで待つ時間（この間にペンが触れたら、手のひらとして取り消す） */
 const PALM_WAIT = 250;
-/** タッチの信号で書いている線の番号（ペンの信号の番号と重ならないように負の数） */
-const TOUCH_ID = -1000;
 const DEBUG_KEY = 'study-sakura:ink-debug';
 
 type Tool = 'pen' | 'marker' | 'eraser' | 'select' | 'flag';
@@ -691,17 +689,6 @@ export default function InkEditor({ note }: { note: Note }) {
         lastPen = performance.now();
         cancelPan();
         cancelTap();
-        // タッチの信号で先に書き始めていたら、その線をペンの信号で続ける
-        const byTouch = live.current && live.current.pointerId <= TOUCH_ID ? live.current : erasing.current && erasing.current.pointerId <= TOUCH_ID ? erasing.current : null;
-        if (byTouch) {
-          byTouch.pointerId = e.pointerId;
-          try {
-            paper.setPointerCapture(e.pointerId);
-          } catch {
-            // 掴めなくても書けるようにする
-          }
-          return;
-        }
       }
       if (live.current) finishStroke();
       if (erasing.current) endErase();
@@ -732,7 +719,7 @@ export default function InkEditor({ note }: { note: Note }) {
       startInk(e.pointerId, x, y, e.pointerType === 'pen' ? e.pressure || 0.5 : 0.5);
     };
 
-    /** 線（または消しゴム）を書き始める。ペンの信号とタッチの信号のどちらからも使う */
+    /** 線（または消しゴム）を書き始める */
     const startInk = (pointerId: number, x: number, y: number, pressure: number) => {
       const p = prefsRef.current;
       if (p.tool === 'eraser') {
@@ -899,32 +886,6 @@ export default function InkEditor({ note }: { note: Note }) {
         touchStarts.delete(t.identifier);
         return `${name} 動${Math.round(t.clientX - s0.x)},${Math.round(t.clientY - s0.y)} ${Math.round(performance.now() - s0.t)}ms`;
       }).join(',');
-    /** ペンのタッチの信号で書く（iPad でペンの信号 pointerdown が来ないことがあるときの予備） */
-    const penTouch = (e: TouchEvent) => {
-      for (const t of Array.from(e.changedTouches)) {
-        if (!isPenTouch(t)) continue;
-        const id = TOUCH_ID - t.identifier;
-        const { x, y } = toLogical(t);
-        if (e.type === 'touchstart') {
-          penDown = true;
-          lastPen = performance.now();
-          cancelTap();
-          const tool = prefsRef.current.tool;
-          if (live.current || erasing.current || memorizeRef.current || !paper.contains(t.target as Node)) continue;
-          if (tool !== 'pen' && tool !== 'marker' && tool !== 'eraser') continue;
-          log('タッチの信号で書き始め');
-          startInk(id, x, y, t.force || 0.5);
-        } else if (e.type === 'touchmove') addInk(id, x, y, t.force || 0.5);
-        else {
-          lastPen = performance.now();
-          if (live.current?.pointerId === id) finishStroke();
-          if (erasing.current?.pointerId === id) endErase();
-          // ペンの信号がまだ続いていなければ、ペンは離れた
-          if (!live.current && !erasing.current) penDown = false;
-        }
-      }
-    };
-
     const begin = (e: TouchEvent) => {
       const m = mid(e.touches);
       g = { x: m.x, y: m.y, left: scroller.scrollLeft, top: scroller.scrollTop, moved: false, multi: e.touches.length > 1, t0: performance.now(), samples: [{ t: performance.now(), x: m.x, y: m.y }] };
@@ -948,7 +909,6 @@ export default function InkEditor({ note }: { note: Note }) {
       if (!paper.contains(target) && target.closest('button, a, input, [role="button"]')) return;
       e.preventDefault(); // スクリブル（手書き文字の自動変換）や長押しメニューも防ぐ
       log(`t+ ${kinds(e)} (計${e.touches.length})`);
-      penTouch(e);
       fingers = e.touches.length;
       stopMomentum();
       // ペンで書いている間・書いた直後は、指（＝ペンを持つ手の手のひら）では何もしない
@@ -967,7 +927,6 @@ export default function InkEditor({ note }: { note: Note }) {
 
     const onTouchMove = (e: TouchEvent) => {
       e.preventDefault();
-      penTouch(e);
       if (!g || blocked) return;
       if (isStylus(e) || penDown) {
         cancelPan();
@@ -986,7 +945,6 @@ export default function InkEditor({ note }: { note: Note }) {
 
     const onTouchEnd = (e: TouchEvent) => {
       log(`${e.type === 'touchend' ? 't-' : 't✕'} ${kinds(e)} (残${e.touches.length})`);
-      penTouch(e);
       fingers = e.touches.length;
       if (fingers === 0) blocked = false;
       const p = g;

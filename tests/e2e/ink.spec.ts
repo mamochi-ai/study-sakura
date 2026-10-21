@@ -167,7 +167,7 @@ test('手書き：手のひらが軽く触れてすぐペンが来たら、指�
   await expect(page.locator('.modal')).toBeVisible();
 });
 
-test('手書き：ペンの信号（pointerdown）が来なくても、ペンのタッチの信号で書ける。両方来ても線は 1 本', async ({ page }) => {
+test('手書き：ペンの信号の記録を表示でき、手のひらを置いたままペンで書ける（ペンのタッチの信号が一緒に来ても線は 1 本）', async ({ page }) => {
   await openDesk(page);
   await createBinder(page);
   await page.locator('.note-tabs-bar summary[title="新しいノート"]').click();
@@ -178,8 +178,8 @@ test('手書き：ペンの信号（pointerdown）が来なくても、ペンの
   await page.getByRole('button', { name: /ペンの信号を表示/ }).click();
   await expect(page.locator('.ink-debug')).toBeVisible();
 
-  /** order：touch＝タッチの信号だけ／touchFirst・penFirst＝両方（先に来るほうが違う） */
-  const draw = (order: 'touch' | 'touchFirst' | 'penFirst', y: number) =>
+  /** order：ペンの信号とペンのタッチの信号のどちらが先に来るか */
+  const draw = (order: 'touchFirst' | 'penFirst', y: number) =>
     paper.evaluate(
       async (el, { order, y }) => {
         const r = el.getBoundingClientRect();
@@ -193,32 +193,29 @@ test('手書き：ペンの信号（pointerdown）が来なくても、ペンの
           el.dispatchEvent(new PointerEvent(type, { pointerId: 9, pointerType: 'pen', isPrimary: true, clientX: r.left + x, clientY: r.top + y, pressure: 0.5, bubbles: true, cancelable: true }));
         // 手のひらを置いたまま
         el.dispatchEvent(new TouchEvent('touchstart', { touches: [palm], targetTouches: [palm], changedTouches: [palm], bubbles: true, cancelable: true }));
-        const withPen = order !== 'touch';
         if (order === 'penFirst') pen('pointerdown', 60);
         touch('touchstart', 60, [palm, pt(60)]);
         if (order === 'touchFirst') pen('pointerdown', 60);
         for (let x = 80; x <= 300; x += 20) {
-          if (withPen) pen('pointermove', x);
+          pen('pointermove', x);
           touch('touchmove', x, [palm, pt(x)]);
           await new Promise((res) => setTimeout(res, 10));
         }
-        if (withPen) pen('pointerup', 300);
+        pen('pointerup', 300);
         touch('touchend', 300, [palm]);
         el.dispatchEvent(new TouchEvent('touchend', { touches: [], targetTouches: [], changedTouches: [palm], bubbles: true, cancelable: true }));
       },
       { order, y },
     );
 
-  await draw('touch', 100);
-  await expect.poll(async () => (await readTable(page, 'strokes')).length).toBe(1);
-  await expect(page.locator('.ink-debug')).toContainText('タッチの信号で書き始め');
   await draw('touchFirst', 200);
-  await expect.poll(async () => (await readTable(page, 'strokes')).length).toBe(2);
+  await expect.poll(async () => (await readTable(page, 'strokes')).length).toBe(1);
+  await expect(page.locator('.ink-debug')).toContainText('↓ pen');
   await draw('penFirst', 300);
-  await expect.poll(async () => (await readTable(page, 'strokes')).length).toBe(3);
+  await expect.poll(async () => (await readTable(page, 'strokes')).length).toBe(2);
   await page.waitForTimeout(500);
   const strokes = await readTable<{ points: number[] }>(page, 'strokes');
-  expect(strokes).toHaveLength(3);
+  expect(strokes).toHaveLength(2);
   // どの線も最初から最後まで同じ長さでつながっている（途中で別の線に分かれていない）
   const spans = strokes.map((s) => {
     const xs = s.points.filter((_, i) => i % 3 === 0);
