@@ -206,7 +206,7 @@ export default function InkEditor({ note }: { note: Note }) {
     if (!el) return;
     const d = new Date();
     logLines.current.push(`${String(d.getSeconds()).padStart(2, '0')}.${String(d.getMilliseconds()).padStart(3, '0')} ${msg}`);
-    if (logLines.current.length > 24) logLines.current.shift();
+    if (logLines.current.length > 30) logLines.current.shift();
     el.textContent = logLines.current.join('\n');
   };
   const toggleDebug = () => {
@@ -681,7 +681,7 @@ export default function InkEditor({ note }: { note: Note }) {
       const itemEl = target.closest<HTMLElement>('[data-item-id]');
       // 選択ツールでは、指でも画像などを動かせる
       const selectTouch = e.pointerType === 'touch' && tool === 'select' && (itemEl || target.closest('[data-handle], [data-delete]'));
-      log(`↓ ${e.pointerType} #${e.pointerId}`);
+      log(`↓ ${e.pointerType} #${e.pointerId % 1000}${e.pointerType === 'touch' ? ` ${Math.round(e.width)}×${Math.round(e.height)}` : ''}`);
       if (!drawsWith(e) && !selectTouch) return;
       if (e.pointerType === 'mouse' && e.button !== 0) return;
       e.preventDefault();
@@ -821,7 +821,7 @@ export default function InkEditor({ note }: { note: Note }) {
     };
 
     const onUp = (e: PointerEvent) => {
-      if (e.pointerType !== 'touch') log(`${e.type === 'pointerup' ? '↑' : '✕ ' + e.type} ${e.pointerType} #${e.pointerId} 点${(live.current?.pointerId === e.pointerId ? live.current.stroke.points.length / 3 : 0)}`);
+      if (e.pointerType !== 'touch') log(`${e.type === 'pointerup' ? '↑' : '✕ ' + e.type} ${e.pointerType} #${e.pointerId % 1000} 点${(live.current?.pointerId === e.pointerId ? live.current.stroke.points.length / 3 : 0)}`);
       claimedByPointer = false;
       if (e.pointerType === 'pen') {
         penDown = false;
@@ -885,7 +885,20 @@ export default function InkEditor({ note }: { note: Note }) {
     };
     const isPenTouch = (t: Touch) => (t as Touch & { touchType?: string }).touchType === 'stylus';
     const isStylus = (e: TouchEvent) => Array.from(e.touches).some(isPenTouch);
-    const kinds = (e: TouchEvent) => Array.from(e.changedTouches, (t) => (isPenTouch(t) ? 'ペン' : '指')).join(',');
+    /** 調査用：触れた位置と時刻（離したときに、どれだけ動いたかを出す） */
+    const touchStarts = new Map<number, { x: number; y: number; t: number }>();
+    const kinds = (e: TouchEvent) =>
+      Array.from(e.changedTouches, (t) => {
+        const name = isPenTouch(t) ? 'ペン' : '指';
+        if (e.type === 'touchstart') {
+          touchStarts.set(t.identifier, { x: t.clientX, y: t.clientY, t: performance.now() });
+          return `${name} 半径${Math.round(t.radiusX)} 力${t.force.toFixed(2)}`;
+        }
+        const s0 = touchStarts.get(t.identifier);
+        if (!s0) return name;
+        touchStarts.delete(t.identifier);
+        return `${name} 動${Math.round(t.clientX - s0.x)},${Math.round(t.clientY - s0.y)} ${Math.round(performance.now() - s0.t)}ms`;
+      }).join(',');
     /** ペンのタッチの信号で書く（iPad でペンの信号 pointerdown が来ないことがあるときの予備） */
     const penTouch = (e: TouchEvent) => {
       for (const t of Array.from(e.changedTouches)) {
